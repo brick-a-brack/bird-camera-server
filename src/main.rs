@@ -1,391 +1,245 @@
 use axum::{
-    extract::{Json, Path, Query},
-    http::{header, StatusCode},
-    response::{Html, IntoResponse},
-    routing::{get, post, put},
+    extract::Path,
+    http::StatusCode,
+    response::{IntoResponse, Response, Html},
+    routing::get,
     Router,
 };
-mod camera;
-use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
-use std::time::Duration;
-use tokio::net::TcpListener;
+use nokhwa::Camera;
+use nokhwa::utils::{CameraIndex, RequestedFormatType};
+use nokhwa::pixel_format::RgbFormat;
+use bytes::Bytes;
 
-#[derive(Debug, Deserialize)]
-struct PutPayload {
-    message: String,
-}
-
-#[derive(Debug, Serialize)]
-struct RootResponse {
-    service: &'static str,
-    status: &'static str,
-}
-
-#[derive(Debug, Serialize)]
-struct PutResponse {
-    ok: bool,
-    received: String,
-}
-
-#[derive(Debug, Serialize)]
-struct CamerasResponse {
-    count: usize,
-    cameras: Vec<camera::CameraInfo>,
-}
-
-#[derive(Debug, Serialize)]
-struct ErrorResponse {
-    error: String,
-}
-
-#[derive(Debug, Serialize)]
-struct SessionResponse {
-    ok: bool,
-    camera_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ResolutionQuery {
-    width: Option<u32>,
-    height: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
-struct SetResolutionPayload {
-    width: u32,
-    height: u32,
-}
-
-#[derive(Debug, Serialize)]
-struct CameraResolutionsResponse {
-    camera_id: String,
-    available: Vec<camera::CameraResolution>,
-    preview_selected: Option<camera::CameraResolution>,
+#[derive(Clone, serde::Serialize)]
+struct CameraInfo {
+    index: u32,
+    name: String,
 }
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
-        .route("/", get(get_root).put(put_root))
-        .route("/ui", get(get_ui))
-        .route("/update", put(put_update))
-        .route("/cameras", get(get_cameras))
-        .route("/cameras/{camera_id}/connect", post(post_camera_connect))
-        .route("/cameras/{camera_id}/disconnect", post(post_camera_disconnect))
-        .route("/cameras/{camera_id}/resolutions", get(get_camera_resolutions))
-        .route(
-            "/cameras/{camera_id}/preview-resolution",
-            put(put_camera_preview_resolution),
-        )
-        .route("/cameras/{camera_id}/photo", get(get_camera_photo))
-        .route("/cameras/{camera_id}/stream", get(get_camera_stream));
+        .route("/", get(get_index))
+        .route("/cameras", get(list_cameras))
+        .route("/snapshot/{camera_id}", get(snapshot_jpeg))
+        .route("/stream/{camera_id}", get(stream_mjpeg));
 
-    let listener = TcpListener::bind("127.0.0.1:6969")
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080")
         .await
-        .expect("failed to bind an available port");
+        .unwrap();
 
-    let bound_addr: SocketAddr = listener
-        .local_addr()
-        .expect("failed to read bound socket address");
-
-    println!("bird-camera-server listening on http://{bound_addr}");
-
-    axum::serve(listener, app)
-        .await
-        .expect("server error");
+    println!("Server running on http://0.0.0.0:8080");
+    println!("  Interface: http://localhost:8080");
+    println!("  API cameras: http://localhost:8080/cameras");
+    println!("  Snapshot: http://localhost:8080/snapshot/0");
+    println!("  Stream camera 0: http://localhost:8080/stream/0");
+    
+    axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_root() -> Json<RootResponse> {
-    Json(RootResponse {
-        service: "bird-camera-server",
-        status: "ok",
-    })
-}
-
-async fn get_ui() -> Html<&'static str> {
+async fn get_index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
 }
 
-async fn put_root(Json(payload): Json<PutPayload>) -> Json<PutResponse> {
-    Json(PutResponse {
-        ok: true,
-        received: payload.message,
-    })
-}
-
-async fn put_update(Json(payload): Json<PutPayload>) -> Json<PutResponse> {
-    Json(PutResponse {
-        ok: true,
-        received: payload.message,
-    })
-}
-
-async fn get_cameras() -> (StatusCode, Json<serde_json::Value>) {
-    match camera::list_cameras() {
-        Ok(cameras) => (
-            StatusCode::OK,
-            Json(serde_json::json!(CamerasResponse {
-                count: cameras.len(),
-                cameras,
-            })),
-        ),
-        Err(error) => (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!(ErrorResponse { error })),
-        ),
-    }
-}
-
-fn resolution_from_query(query: &ResolutionQuery) -> Result<Option<camera::CameraResolution>, String> {
-    match (query.width, query.height) {
-        (Some(width), Some(height)) => {
-            if width == 0 || height == 0 {
-                return Err("width and height must be greater than 0".to_string());
+async fn list_cameras() -> impl IntoResponse {
+    // Try to enumerate cameras by attempting to open them
+    let mut cameras = Vec::new();
+    
+    for i in 0..10 {
+        match Camera::new(
+            CameraIndex::Index(i),
+            nokhwa::utils::RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate),
+        ) {
+            Ok(_) => {
+                cameras.push(CameraInfo {
+                    index: i,
+                    name: format!("Camera {}", i),
+                });
             }
-            Ok(Some(camera::CameraResolution { width, height }))
-        }
-        (None, None) => Ok(None),
-        _ => Err("both width and height must be provided".to_string()),
-    }
-}
-
-async fn get_camera_resolutions(Path(camera_id): Path<String>) -> impl IntoResponse {
-    match (
-        camera::list_camera_resolutions(&camera_id),
-        camera::get_camera_preview_resolution(&camera_id),
-    ) {
-        (Ok(available), Ok(preview_selected)) => (
-            StatusCode::OK,
-            Json(serde_json::json!(CameraResolutionsResponse {
-                camera_id,
-                available,
-                preview_selected,
-            })),
-        )
-            .into_response(),
-        (Err(error), _) | (_, Err(error)) => {
-            let status = if error.contains("camera not found") || error.contains("invalid camera id") {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
-
-            (status, Json(serde_json::json!(ErrorResponse { error }))).into_response()
+            Err(_) => {}
         }
     }
+
+    let json = serde_json::to_string(&cameras).unwrap_or_else(|_| "[]".to_string());
+    (StatusCode::OK, [("Content-Type", "application/json")], json)
 }
 
-async fn put_camera_preview_resolution(
-    Path(camera_id): Path<String>,
-    Json(payload): Json<SetResolutionPayload>,
-) -> impl IntoResponse {
-    let resolution = camera::CameraResolution {
-        width: payload.width,
-        height: payload.height,
-    };
-
-    match camera::set_camera_preview_resolution(&camera_id, resolution) {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(serde_json::json!({
-                "ok": true,
-                "camera_id": camera_id,
-                "preview_resolution": resolution,
-            })),
-        )
-            .into_response(),
-        Err(error) => {
-            let status = if error.contains("camera not found") || error.contains("invalid camera id") {
-                StatusCode::NOT_FOUND
-            } else if error.contains("not connected") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::BAD_REQUEST
-            };
-
-            (status, Json(serde_json::json!(ErrorResponse { error }))).into_response()
-        }
-    }
-}
-
-async fn get_camera_photo(
-    Path(camera_id): Path<String>,
-    Query(query): Query<ResolutionQuery>,
-) -> impl IntoResponse {
-    let preferred_resolution = match resolution_from_query(&query) {
-        Ok(value) => value,
-        Err(error) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!(ErrorResponse { error })),
+async fn snapshot_jpeg(Path(camera_id): Path<u32>) -> Response {
+    match tokio::task::spawn_blocking(move || {
+        capture_frame_jpeg(camera_id)
+    }).await {
+        Ok(Ok(data)) => {
+            (
+                StatusCode::OK,
+                [("Content-Type", "image/jpeg")],
+                data,
             )
-                .into_response();
+                .into_response()
         }
-    };
-
-    match camera::capture_photo_jpeg_with_resolution(&camera_id, preferred_resolution) {
-        Ok(jpeg_bytes) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "image/jpeg")],
-            jpeg_bytes,
-        )
-            .into_response(),
-        Err(error) => {
-            let status = if error.contains("camera not found") || error.contains("invalid camera id") {
-                StatusCode::NOT_FOUND
-            } else if error.contains("not connected") {
-                StatusCode::CONFLICT
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
-
-            (status, Json(serde_json::json!(ErrorResponse { error }))).into_response()
-        }
+        Ok(Err(_)) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to capture frame").into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Task failed").into_response(),
     }
 }
 
-async fn post_camera_connect(Path(camera_id): Path<String>) -> impl IntoResponse {
-    match camera::connect_camera(&camera_id) {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(serde_json::json!(SessionResponse {
-                ok: true,
-                camera_id,
-            })),
-        )
-            .into_response(),
-        Err(error) => {
-            let status = if error.contains("camera not found") || error.contains("invalid camera id") {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
+fn capture_frame_jpeg(camera_id: u32) -> Result<Vec<u8>, String> {
+    // Build the camera first, then query all formats exposed by the driver.
+    // This avoids hardcoding guesses that may not match the active backend.
+    let mut camera = Camera::new(
+        CameraIndex::Index(camera_id),
+        nokhwa::utils::RequestedFormat::new::<RgbFormat>(RequestedFormatType::None),
+    )
+    .map_err(|e| format!("Failed to create camera: {}", e))?;
 
-            (status, Json(serde_json::json!(ErrorResponse { error }))).into_response()
-        }
-    }
+    let formats = camera
+        .compatible_camera_formats()
+        .map_err(|e| format!("Failed to list camera formats: {}", e))?;
+
+    let best = formats
+        .iter()
+        .copied()
+        .max_by_key(|fmt| {
+            let res = fmt.resolution();
+            let pixels = (res.width_x as u64) * (res.height_y as u64);
+            let codec_rank = match fmt.format() {
+                nokhwa::utils::FrameFormat::MJPEG => 2u8,
+                nokhwa::utils::FrameFormat::YUYV
+                | nokhwa::utils::FrameFormat::NV12
+                | nokhwa::utils::FrameFormat::RAWRGB
+                | nokhwa::utils::FrameFormat::RAWBGR => 1u8,
+                _ => 0u8,
+            };
+            (pixels, codec_rank, fmt.frame_rate())
+        })
+        .ok_or("No compatible format found")?;
+
+    camera
+        .set_camera_requset(nokhwa::utils::RequestedFormat::with_formats(
+            RequestedFormatType::Exact(best),
+            &[best.format()],
+        ))
+        .map_err(|e| format!("Failed to set best photo format: {}", e))?;
+    
+    camera.open_stream().map_err(|e| format!("Failed to open stream: {}", e))?;
+    let frame = camera.frame().map_err(|e| format!("Failed to read frame: {}", e))?;
+    let rgb_data = frame.decode_image::<RgbFormat>().map_err(|e| format!("Failed to decode: {}", e))?;
+    let (width, height) = (frame.resolution().width_x, frame.resolution().height_y);
+    
+    println!(
+        "Captured frame at resolution: {}x{} ({:?} @ {} fps)",
+        width,
+        height,
+        best.format(),
+        best.frame_rate()
+    );
+    
+    let img = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(
+        width,
+        height,
+        rgb_data.to_vec(),
+    )
+    .ok_or("Failed to create image buffer")?;
+    
+    let mut jpeg_data = Vec::new();
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new(&mut jpeg_data);
+    encoder.encode(
+        &img,
+        width,
+        height,
+        image::ExtendedColorType::Rgb8,
+    ).map_err(|e| format!("Failed to encode: {}", e))?;
+    
+    Ok(jpeg_data)
 }
 
-async fn post_camera_disconnect(Path(camera_id): Path<String>) -> impl IntoResponse {
-    match camera::disconnect_camera(&camera_id) {
-        Ok(()) => (
-            StatusCode::OK,
-            Json(serde_json::json!(SessionResponse {
-                ok: true,
-                camera_id,
-            })),
-        )
-            .into_response(),
-        Err(error) => {
-            let status = if error.contains("camera not found") || error.contains("invalid camera id") {
-                StatusCode::NOT_FOUND
-            } else {
-                StatusCode::INTERNAL_SERVER_ERROR
-            };
+async fn stream_mjpeg(Path(camera_id): Path<u32>) -> Response {
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Bytes, String>>(2);
 
-            (status, Json(serde_json::json!(ErrorResponse { error }))).into_response()
-        }
-    }
-}
-
-async fn get_camera_stream(
-    Path(camera_id): Path<String>,
-    Query(query): Query<ResolutionQuery>,
-) -> impl IntoResponse {
-    let query_resolution = match resolution_from_query(&query) {
-        Ok(value) => value,
-        Err(error) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!(ErrorResponse { error })),
-            )
-                .into_response();
-        }
-    };
-
-    let preview_resolution = if query_resolution.is_some() {
-        query_resolution
-    } else {
-        match camera::get_camera_preview_resolution(&camera_id) {
-            Ok(value) => value,
-            Err(error) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!(ErrorResponse { error })),
-                )
-                    .into_response();
-            }
-        }
-    };
-
-    // Check if camera is connected
-    if !camera::is_camera_connected(&camera_id) {
-        return (
-            StatusCode::CONFLICT,
-            Json(serde_json::json!(ErrorResponse {
-                error: "camera not connected".to_string()
-            })),
-        )
-            .into_response();
-    }
-
-    // Create a channel to send frame data
-    let (tx, rx) = tokio::sync::mpsc::channel::<Result<axum::body::Bytes, std::io::Error>>(10);
-    let camera_id_clone = camera_id.clone();
-
-    // Spawn a task that reads frames and sends them to the channel
-    tokio::spawn(async move {
-        loop {
-            match camera::capture_photo_jpeg_with_resolution(&camera_id_clone, preview_resolution) {
-                Ok(jpeg_bytes) => {
-                    // Send boundary
-                    if tx
-                        .send(Ok(axum::body::Bytes::from_static(b"--frame\r\n")))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-
-                    // Send content-type and content-length
-                    let mut header = Vec::new();
-                    header.extend(b"Content-Type: image/jpeg\r\nContent-Length: ");
-                    header.extend(jpeg_bytes.len().to_string().as_bytes());
-                    header.extend(b"\r\n\r\n");
-
-                    if tx.send(Ok(axum::body::Bytes::from(header))).await.is_err() {
-                        break;
-                    }
-
-                    // Send JPEG data
-                    if tx.send(Ok(axum::body::Bytes::from(jpeg_bytes))).await.is_err() {
-                        break;
-                    }
-
-                    // Send final CRLF
-                    if tx.send(Ok(axum::body::Bytes::from_static(b"\r\n"))).await.is_err() {
-                        break;
-                    }
-                }
-                Err(_) => {
-                    // Camera disconnected or error
-                    break;
-                }
-            }
-
-            tokio::time::sleep(Duration::from_millis(33)).await;
-        }
+    // One dedicated OS thread per stream: camera access is blocking and not Send across tokio tasks.
+    std::thread::spawn(move || {
+        stream_frames_blocking(camera_id, tx);
     });
-
+    
+    let body = axum::body::Body::from_stream(
+        tokio_stream::wrappers::ReceiverStream::new(rx)
+    );
+    
     (
         StatusCode::OK,
-        [
-            (header::CONTENT_TYPE, "multipart/x-mixed-replace; boundary=frame"),
-            (header::CACHE_CONTROL, "no-cache"),
-            (header::CONNECTION, "keep-alive"),
-        ],
-        axum::body::Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(rx)),
+        [("Content-Type", "multipart/x-mixed-replace; boundary=frame")],
+        body,
     )
         .into_response()
+}
+
+fn stream_frames_blocking(camera_id: u32, tx: tokio::sync::mpsc::Sender<Result<Bytes, String>>) {
+    let mut camera = match Camera::new(
+        CameraIndex::Index(camera_id),
+        nokhwa::utils::RequestedFormat::with_formats(
+            RequestedFormatType::AbsoluteHighestFrameRate,
+            &[nokhwa::utils::FrameFormat::MJPEG],
+        ),
+    ) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    
+    if camera.open_stream().is_err() {
+        return;
+    }
+    
+    loop {
+        match camera.frame() {
+            Ok(frame) => {
+                let jpeg_data = if frame.source_frame_format() == nokhwa::utils::FrameFormat::MJPEG {
+                    Some(frame.buffer().to_vec())
+                } else {
+                    match frame.decode_image::<RgbFormat>() {
+                        Ok(rgb_data) => {
+                            let (width, height) = (frame.resolution().width_x, frame.resolution().height_y);
+                            if let Some(img) = image::ImageBuffer::<image::Rgb<u8>, _>::from_raw(
+                                width,
+                                height,
+                                rgb_data.to_vec(),
+                            ) {
+                                let mut encoded = Vec::new();
+                                let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut encoded, 55);
+                                if encoder
+                                    .encode(&img, width, height, image::ExtendedColorType::Rgb8)
+                                    .is_ok()
+                                {
+                                    Some(encoded)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        }
+                        Err(_) => None,
+                    }
+                };
+
+                if let Some(jpeg_data) = jpeg_data {
+                    let frame_header = format!(
+                        "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\n\r\n",
+                        jpeg_data.len()
+                    );
+
+                    let mut response = Vec::with_capacity(frame_header.len() + jpeg_data.len() + 2);
+                    response.extend_from_slice(frame_header.as_bytes());
+                    response.extend_from_slice(&jpeg_data);
+                    response.extend_from_slice(b"\r\n");
+
+                    match tx.try_send(Ok(Bytes::from(response))) {
+                        Ok(()) => {}
+                        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                            // Drop stale frame when client/network is slower than camera.
+                        }
+                        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => break,
+                    }
+                }
+            }
+            Err(_) => break,
+        }
+    }
 }

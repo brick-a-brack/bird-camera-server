@@ -1,605 +1,323 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bird Camera Control</title>
-  <style>
-    :root {
-      --bg: #f3efe8;
-      --panel: #fffdf8;
-      --ink: #1f2937;
-      --muted: #6b7280;
-      --accent: #0f766e;
-      --accent-strong: #115e59;
-      --danger: #b91c1c;
-      --border: #e5ddd0;
-      --shadow: rgba(17, 24, 39, 0.12);
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at 15% 20%, #e8f6f3 0, transparent 35%),
-        radial-gradient(circle at 80% 10%, #fff0db 0, transparent 30%),
-        var(--bg);
-      display: grid;
-      place-items: center;
-      padding: 24px;
-    }
-
-    .card {
-      width: min(780px, 100%);
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      box-shadow: 0 20px 40px var(--shadow);
-      padding: 24px;
-    }
-
-    h1 {
-      margin: 0 0 6px;
-      font-size: 28px;
-      letter-spacing: 0.2px;
-    }
-
-    .subtitle {
-      margin: 0 0 20px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .row {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 10px;
-      align-items: center;
-    }
-
-    select, button {
-      height: 42px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      padding: 0 12px;
-      font-size: 14px;
-    }
-
-    select {
-      background: #fff;
-      color: var(--ink);
-    }
-
-    button {
-      cursor: pointer;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-      border-color: transparent;
-      transition: background 120ms ease, transform 120ms ease;
-    }
-
-    button:hover { background: var(--accent-strong); }
-    button:active { transform: translateY(1px); }
-
-    button.secondary {
-      background: #fff;
-      color: var(--ink);
-      border-color: var(--border);
-    }
-
-    .status {
-      margin: 14px 0 0;
-      min-height: 22px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .status.error { color: var(--danger); }
-
-    .image-wrap {
-      margin-top: 16px;
-      border: 1px dashed var(--border);
-      border-radius: 12px;
-      min-height: 240px;
-      display: grid;
-      place-items: center;
-      background: #fff;
-      overflow: hidden;
-    }
-
-    .hint {
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-      padding: 12px;
-    }
-
-    img {
-      max-width: 100%;
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-
-    [hidden] {
-      display: none !important;
-    }
-
-    @media (max-width: 680px) {
-      .row {
-        grid-template-columns: 1fr;
-      }
-
-      button,
-      select {
-        width: 100%;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bird Camera Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        .cameras-list {
+            list-style: none;
+        }
+        
+        .cameras-list li {
+            padding: 10px;
+            background: #f5f5f5;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .camera-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .video-container {
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .no-stream {
+            color: white;
+            text-align: center;
+        }
+        
+        .api-docs {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin-top: 20px;
+        }
+        
+        .api-docs h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .endpoint {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .endpoint:last-child {
+            border-bottom: none;
+        }
+        
+        .method {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 0.9em;
+        }
+        
+        .path {
+            font-family: 'Courier New', monospace;
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        
+        .description {
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+            
+            .camera-actions {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin: 20px 0;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+    </style>
 </head>
 <body>
-  <main class="card">
-    <h1>Bird Camera Control</h1>
-    <p class="subtitle">Liste les cameras, selectionne une source, puis capture une photo ou affiche le flux MJPEG.</p>
-
-    <div class="row">
-      <select id="cameraSelect" aria-label="Camera selection"></select>
-      <button id="refreshBtn" class="secondary" type="button">Rafraichir</button>
-      <button id="connectBtn" class="secondary" type="button">Connecter</button>
+    <div class="container">
+        <header>
+            <h1>🎥 Bird Camera Server</h1>
+            <p>Serveur de streaming caméra en temps réel avec MJPEG</p>
+        </header>
+        
+        <div class="main-content">
+            <div class="card">
+                <h2>📷 Caméras disponibles</h2>
+                <div class="loading" id="loading">
+                    Chargement des caméras...
+                </div>
+                <ul class="cameras-list" id="cameras-list">
+                </ul>
+            </div>
+            
+            <div class="card">
+                <h2>Live Stream</h2>
+                <div class="video-container" id="video-container">
+                    <div class="no-stream">Sélectionnez une caméra pour démarrer</div>
+                </div>
+                <button onclick="stopStream()" style="width: 100%; margin-top: 10px;">⏹️ Arrêter le stream</button>
+            </div>
+        </div>
+        
+        <div class="api-docs">
+            <h2>📚 Documentation API</h2>
+            
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/cameras</span>
+                <p class="description">Liste toutes les caméras disponibles avec leur index et nom</p>
+                <p><strong>Réponse:</strong> JSON array avec les caméras</p>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/snapshot/:camera_id</span>
+                <p class="description">Récupère un snapshot JPEG de la caméra spécifiée</p>
+                <p><strong>Paramètres:</strong> camera_id (entier)</p>
+                <p><strong>Réponse:</strong> Image JPEG</p>
+            </div>
+            
+            <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/stream/:camera_id</span>
+                <p class="description">Diffuse un flux MJPEG en continu de la caméra spécifiée</p>
+                <p><strong>Paramètres:</strong> camera_id (entier)</p>
+                <p><strong>Réponse:</strong> Stream MJPEG multipart/x-mixed-replace</p>
+            </div>
+        </div>
     </div>
-    <div class="row" style="margin-top: 10px;">
-      <div></div>
-      <button id="disconnectBtn" class="secondary" type="button">Deconnecter</button>
-      <button id="captureBtn" type="button">Prendre une photo</button>
-    </div>
-    <div class="row" style="margin-top: 10px;">
-      <div></div>
-      <button id="streamStopBtn" class="secondary" type="button" hidden>Arreter stream</button>
-      <button id="streamStartBtn" type="button" hidden>Voir le flux video</button>
-    </div>
-    <div class="row" style="margin-top: 10px; grid-template-columns: 1fr 1fr;">
-      <select id="previewResolutionSelect" aria-label="Resolution preview"></select>
-      <select id="photoResolutionSelect" aria-label="Resolution photo"></select>
-    </div>
-
-    <p id="status" class="status">Chargement des cameras...</p>
-
-    <section class="image-wrap" id="photoWrap">
-      <img id="photo" alt="Photo capturee" hidden />
-      <div id="placeholder" class="hint">Aucune photo pour le moment.</div>
-    </section>
-    <section class="image-wrap" id="streamWrap" hidden>
-      <img id="stream" alt="Flux video" style="min-height: auto; width: 100%; height: auto;" />
-    </section>
-  </main>
-
-  <script>
-    const cameraSelect = document.getElementById("cameraSelect");
-    const refreshBtn = document.getElementById("refreshBtn");
-    const connectBtn = document.getElementById("connectBtn");
-    const disconnectBtn = document.getElementById("disconnectBtn");
-    const captureBtn = document.getElementById("captureBtn");
-    const streamStartBtn = document.getElementById("streamStartBtn");
-    const streamStopBtn = document.getElementById("streamStopBtn");
-    const previewResolutionSelect = document.getElementById("previewResolutionSelect");
-    const photoResolutionSelect = document.getElementById("photoResolutionSelect");
-    const statusEl = document.getElementById("status");
-    const photoWrap = document.getElementById("photoWrap");
-    const photoEl = document.getElementById("photo");
-    const streamImg = document.getElementById("stream");
-    const streamWrap = document.getElementById("streamWrap");
-    const placeholderEl = document.getElementById("placeholder");
-
-    let camerasCache = [];
-    let availableResolutions = [];
-    let streamActive = false;
-    let streamCameraId = null;
-
-    function toResolutionText(resolution) {
-      return `${resolution.width}x${resolution.height}`;
-    }
-
-    function parseResolutionValue(value) {
-      if (!value) {
-        return null;
-      }
-
-      const [w, h] = value.split("x").map(Number);
-      if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
-        return null;
-      }
-
-      return { width: w, height: h };
-    }
-
-    function updateResolutionSelects(previewSelected = null) {
-      const selected = selectedCamera();
-      const connected = Boolean(selected && selected.connected);
-
-      previewResolutionSelect.innerHTML = "";
-      photoResolutionSelect.innerHTML = "";
-
-      if (!connected || availableResolutions.length === 0) {
-        const emptyPreview = document.createElement("option");
-        emptyPreview.value = "";
-        emptyPreview.textContent = "Preview: resolution indisponible";
-        previewResolutionSelect.appendChild(emptyPreview);
-
-        const emptyPhoto = document.createElement("option");
-        emptyPhoto.value = "";
-        emptyPhoto.textContent = "Photo: resolution indisponible";
-        photoResolutionSelect.appendChild(emptyPhoto);
-
-        previewResolutionSelect.disabled = true;
-        photoResolutionSelect.disabled = true;
-        return;
-      }
-
-      for (const resolution of availableResolutions) {
-        const value = toResolutionText(resolution);
-
-        const previewOption = document.createElement("option");
-        previewOption.value = value;
-        previewOption.textContent = `Preview ${value}`;
-        previewResolutionSelect.appendChild(previewOption);
-
-        const photoOption = document.createElement("option");
-        photoOption.value = value;
-        photoOption.textContent = `Photo ${value}`;
-        photoResolutionSelect.appendChild(photoOption);
-      }
-
-      const fallback = availableResolutions[0];
-      const previewValue = previewSelected
-        ? toResolutionText(previewSelected)
-        : toResolutionText(fallback);
-
-      if (Array.from(previewResolutionSelect.options).some(opt => opt.value === previewValue)) {
-        previewResolutionSelect.value = previewValue;
-      }
-
-      if (Array.from(photoResolutionSelect.options).some(opt => opt.value === toResolutionText(fallback))) {
-        photoResolutionSelect.value = toResolutionText(fallback);
-      }
-
-      previewResolutionSelect.disabled = false;
-      photoResolutionSelect.disabled = false;
-    }
-
-    async function fetchResolutionsForSelectedCamera() {
-      const selected = selectedCamera();
-      const connected = Boolean(selected && selected.connected);
-      availableResolutions = [];
-
-      if (!selected || !connected) {
-        updateResolutionSelects();
-        return;
-      }
-
-      try {
-        const response = await fetch(`/cameras/${encodeURIComponent(selected.id)}/resolutions`);
-        if (!response.ok) {
-          throw new Error("Erreur HTTP " + response.status);
-        }
-
-        const data = await response.json();
-        availableResolutions = Array.isArray(data.available) ? data.available : [];
-        updateResolutionSelects(data.preview_selected || null);
-      } catch (error) {
-        updateResolutionSelects();
-        setStatus("Impossible de charger les resolutions: " + error.message, true);
-      }
-    }
-
-    async function applyPreviewResolution(cameraId) {
-      const selectedResolution = parseResolutionValue(previewResolutionSelect.value);
-      if (!selectedResolution) {
-        return;
-      }
-
-      const response = await fetch(`/cameras/${encodeURIComponent(cameraId)}/preview-resolution`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(selectedResolution)
-      });
-
-      if (!response.ok) {
-        let message = "Erreur HTTP " + response.status;
-        try {
-          const errorBody = await response.json();
-          if (errorBody && errorBody.error) {
-            message = errorBody.error;
-          }
-        } catch (_) {}
-        throw new Error(message);
-      }
-    }
-
-    function selectedCamera() {
-      return camerasCache.find(camera => camera.id === cameraSelect.value) || null;
-    }
-
-    function refreshButtonsState() {
-      const selected = selectedCamera();
-      const hasSelection = Boolean(selected);
-      const connected = Boolean(selected && selected.connected);
-
-      connectBtn.disabled = !hasSelection || connected;
-      disconnectBtn.disabled = !hasSelection || !connected;
-      captureBtn.disabled = !hasSelection || !connected;
-      streamStartBtn.hidden = !connected || streamActive;
-      streamStopBtn.hidden = !streamActive;
-      streamStartBtn.disabled = !connected || streamActive;
-      streamStopBtn.disabled = !streamActive;
-      previewResolutionSelect.disabled = !connected || availableResolutions.length === 0;
-      photoResolutionSelect.disabled = !connected || availableResolutions.length === 0;
-    }
-
-    function stopStreaming(silent = false) {
-      streamActive = false;
-      streamCameraId = null;
-      streamImg.src = "";
-      streamWrap.hidden = true;
-      photoWrap.hidden = false;
-
-      if (photoEl.hidden) {
-        placeholderEl.hidden = false;
-      }
-
-      refreshButtonsState();
-      if (!silent) {
-        setStatus("Stream arrete.");
-      }
-    }
-
-    function setStatus(message, isError = false) {
-      statusEl.textContent = message;
-      statusEl.classList.toggle("error", isError);
-    }
-
-    async function fetchCameras() {
-      setStatus("Chargement des cameras...");
-      cameraSelect.disabled = true;
-      connectBtn.disabled = true;
-      disconnectBtn.disabled = true;
-      captureBtn.disabled = true;
-
-      try {
-        const response = await fetch("/cameras");
-        if (!response.ok) {
-          throw new Error("Erreur HTTP " + response.status);
-        }
-
-        const data = await response.json();
-        const cameras = Array.isArray(data.cameras) ? data.cameras : [];
-        camerasCache = cameras;
-
-        cameraSelect.innerHTML = "";
-
-        if (cameras.length === 0) {
-          const option = document.createElement("option");
-          option.value = "";
-          option.textContent = "Aucune camera detectee";
-          cameraSelect.appendChild(option);
-          setStatus("Aucune camera detectee.", true);
-          return;
-        }
-
-        for (const camera of cameras) {
-          const option = document.createElement("option");
-          option.value = camera.id;
-          const tag = camera.connected ? "connectee" : "deconnectee";
-          option.textContent = `${camera.name} (${camera.id}, ${tag})`;
-          cameraSelect.appendChild(option);
-        }
-
-        setStatus(cameras.length + " camera(s) chargee(s).");
-        await fetchResolutionsForSelectedCamera();
-        refreshButtonsState();
-      } catch (error) {
-        setStatus("Impossible de charger les cameras: " + error.message, true);
-      } finally {
-        cameraSelect.disabled = false;
-        refreshButtonsState();
-      }
-    }
-
-    async function connectCamera() {
-      const cameraId = cameraSelect.value;
-      if (!cameraId) {
-        setStatus("Selectionne une camera.", true);
-        return;
-      }
-
-      setStatus("Connexion en cours...");
-      connectBtn.disabled = true;
-
-      try {
-        const response = await fetch(`/cameras/${encodeURIComponent(cameraId)}/connect`, {
-          method: "POST"
-        });
-        if (!response.ok) {
-          let message = "Erreur HTTP " + response.status;
-          try {
-            const errorBody = await response.json();
-            if (errorBody && errorBody.error) {
-              message = errorBody.error;
+    
+    <script>
+        // Load cameras on page load
+        document.addEventListener('DOMContentLoaded', loadCameras);
+        
+        let currentStreamUrl = null;
+        
+        async function loadCameras() {
+            const loading = document.getElementById('loading');
+            const list = document.getElementById('cameras-list');
+            
+            loading.classList.add('active');
+            list.innerHTML = '';
+            
+            try {
+                const response = await fetch('/cameras');
+                const cameras = await response.json();
+                
+                if (cameras.length === 0) {
+                    list.innerHTML = '<li>Aucune caméra trouvée</li>';
+                } else {
+                    cameras.forEach(camera => {
+                        const li = document.createElement('li');
+                        li.innerHTML = `
+                            <strong>${camera.name}</strong> (ID: ${camera.index})
+                            <div class="camera-actions">
+                                <button onclick="viewSnapshot(${camera.index})">📸 Photo</button>
+                                <button onclick="startStream(${camera.index})">▶️ Stream</button>
+                            </div>
+                        `;
+                        list.appendChild(li);
+                    });
+                }
+            } catch (error) {
+                list.innerHTML = '<li>Erreur lors du chargement des caméras: ' + error.message + '</li>';
+                console.error('Error:', error);
+            } finally {
+                loading.classList.remove('active');
             }
-          } catch (_) {}
-          throw new Error(message);
         }
-
-        setStatus("Camera connectee.");
-        await fetchCameras();
-        await fetchResolutionsForSelectedCamera();
-      } catch (error) {
-        setStatus("Echec connexion: " + error.message, true);
-      } finally {
-        refreshButtonsState();
-      }
-    }
-
-    async function disconnectCamera() {
-      const cameraId = cameraSelect.value;
-      if (!cameraId) {
-        setStatus("Selectionne une camera.", true);
-        return;
-      }
-
-      if (streamActive && streamCameraId === cameraId) {
-        stopStreaming(true);
-      }
-
-      setStatus("Deconnexion en cours...");
-      disconnectBtn.disabled = true;
-
-      try {
-        const response = await fetch(`/cameras/${encodeURIComponent(cameraId)}/disconnect`, {
-          method: "POST"
-        });
-        if (!response.ok) {
-          let message = "Erreur HTTP " + response.status;
-          try {
-            const errorBody = await response.json();
-            if (errorBody && errorBody.error) {
-              message = errorBody.error;
+        
+        function viewSnapshot(cameraId) {
+            const container = document.getElementById('video-container');
+            container.innerHTML = `<img src="/snapshot/${cameraId}?t=${Date.now()}" alt="Snapshot">`;
+        }
+        
+        function startStream(cameraId) {
+            stopStream();
+            const container = document.getElementById('video-container');
+            const streamUrl = `/stream/${cameraId}`;
+            currentStreamUrl = streamUrl;
+            
+            const img = document.createElement('img');
+            img.src = streamUrl;
+            img.alt = 'Stream';
+            
+            container.innerHTML = '';
+            container.appendChild(img);
+            
+            console.log('Stream started for camera', cameraId);
+        }
+        
+        function stopStream() {
+            if (currentStreamUrl) {
+                const container = document.getElementById('video-container');
+                container.innerHTML = '<div class="no-stream">Stream arrêté</div>';
+                currentStreamUrl = null;
             }
-          } catch (_) {}
-          throw new Error(message);
         }
-
-        setStatus("Camera deconnectee.");
-        await fetchCameras();
-        await fetchResolutionsForSelectedCamera();
-      } catch (error) {
-        setStatus("Echec deconnexion: " + error.message, true);
-      } finally {
-        refreshButtonsState();
-      }
-    }
-
-    async function capturePhoto() {
-      const cameraId = cameraSelect.value;
-      if (!cameraId) {
-        setStatus("Selectionne une camera.", true);
-        return;
-      }
-
-      if (streamActive && streamCameraId !== cameraId) {
-        stopStreaming(true);
-      }
-
-      setStatus("Capture en cours...");
-      captureBtn.disabled = true;
-
-      try {
-        const photoResolution = parseResolutionValue(photoResolutionSelect.value);
-        const query = photoResolution
-          ? `?width=${photoResolution.width}&height=${photoResolution.height}`
-          : "";
-        const response = await fetch(`/cameras/${encodeURIComponent(cameraId)}/photo${query}`);
-        if (!response.ok) {
-          let message = "Erreur HTTP " + response.status;
-          try {
-            const errorBody = await response.json();
-            if (errorBody && errorBody.error) {
-              message = errorBody.error;
-            }
-          } catch (_) {}
-          throw new Error(message);
-        }
-
-        const imageBlob = await response.blob();
-        const imageUrl = URL.createObjectURL(imageBlob);
-        photoEl.src = imageUrl;
-        photoEl.hidden = false;
-        photoWrap.hidden = false;
-        streamWrap.hidden = true;
-        placeholderEl.hidden = true;
-
-        setStatus("Photo capturee avec succes.");
-      } catch (error) {
-        setStatus("Echec de capture: " + error.message, true);
-      } finally {
-        captureBtn.disabled = false;
-      }
-    }
-
-    async function startStreaming() {
-      const cameraId = cameraSelect.value;
-      if (!cameraId) {
-        setStatus("Selectionne une camera.", true);
-        return;
-      }
-
-      if (!selectedCamera() || !selectedCamera().connected) {
-        setStatus("Connecte la camera avant de demarrer le stream.", true);
-        return;
-      }
-
-      if (streamActive) {
-        return;
-      }
-
-      streamActive = true;
-      streamCameraId = cameraId;
-      streamWrap.hidden = false;
-      photoWrap.hidden = true;
-      placeholderEl.hidden = true;
-      photoEl.hidden = true;
-      refreshButtonsState();
-      setStatus("Streaming en cours...");
-
-      try {
-        await applyPreviewResolution(cameraId);
-      } catch (error) {
-        stopStreaming(true);
-        setStatus("Impossible de regler la resolution preview: " + error.message, true);
-        return;
-      }
-
-      const previewResolution = parseResolutionValue(previewResolutionSelect.value);
-      const query = previewResolution
-        ? `?width=${previewResolution.width}&height=${previewResolution.height}`
-        : "";
-      const streamUrl = `/cameras/${encodeURIComponent(cameraId)}/stream${query}`;
-      const separator = streamUrl.includes("?") ? "&" : "?";
-      streamImg.src = streamUrl + separator + "t=" + Date.now();
-      streamImg.onerror = () => {
-        if (streamActive) {
-          stopStreaming(true);
-          setStatus("Le stream est indisponible.", true);
-        }
-      };
-    }
-
-    refreshBtn.addEventListener("click", async () => {
-      if (streamActive) {
-        stopStreaming(true);
-      }
-      await fetchCameras();
-    });
-    connectBtn.addEventListener("click", connectCamera);
-    disconnectBtn.addEventListener("click", disconnectCamera);
-    captureBtn.addEventListener("click", capturePhoto);
-    streamStartBtn.addEventListener("click", startStreaming);
-    streamStopBtn.addEventListener("click", () => stopStreaming());
-    cameraSelect.addEventListener("change", () => {
-      if (streamActive && streamCameraId !== cameraSelect.value) {
-        stopStreaming(true);
-      }
-      fetchResolutionsForSelectedCamera();
-      refreshButtonsState();
-    });
-
-    fetchCameras();
-  </script>
+        
+        // Refresh cameras every 5 seconds
+        setInterval(loadCameras, 5000);
+    </script>
 </body>
 </html>
