@@ -11,7 +11,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1"
-nokhwa = { version = "0.10", features = ["input-native"] }
+nokhwa = { path = "../nokhwa", features = ["input-native"] }
 hyper = "1"
 bytes = "1"
 
