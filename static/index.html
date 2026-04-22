@@ -1,323 +1,423 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bird Camera Server</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        header {
-            text-align: center;
-            color: white;
-            margin-bottom: 40px;
-        }
-        
-        h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .main-content {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-        }
-        
-        .card h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.5em;
-        }
-        
-        .cameras-list {
-            list-style: none;
-        }
-        
-        .cameras-list li {
-            padding: 10px;
-            background: #f5f5f5;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .camera-actions {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        
-        button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        .video-container {
-            background: #000;
-            border-radius: 10px;
-            overflow: hidden;
-            height: 400px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .video-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .no-stream {
-            color: white;
-            text-align: center;
-        }
-        
-        .api-docs {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-            margin-top: 20px;
-        }
-        
-        .api-docs h2 {
-            color: #667eea;
-            margin-bottom: 20px;
-        }
-        
-        .endpoint {
-            margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #eee;
-        }
-        
-        .endpoint:last-child {
-            border-bottom: none;
-        }
-        
-        .method {
-            display: inline-block;
-            background: #667eea;
-            color: white;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-weight: bold;
-            margin-right: 10px;
-            font-size: 0.9em;
-        }
-        
-        .path {
-            font-family: 'Courier New', monospace;
-            background: #f5f5f5;
-            padding: 5px 10px;
-            border-radius: 3px;
-            display: inline-block;
-            margin-bottom: 10px;
-        }
-        
-        .description {
-            color: #666;
-            margin-bottom: 10px;
-        }
-        
-        @media (max-width: 768px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-            
-            h1 {
-                font-size: 1.8em;
-            }
-            
-            .camera-actions {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-            margin: 20px 0;
-        }
-        
-        .loading.active {
-            display: block;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bird Camera Server</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+      color: #fff;
+      margin-bottom: 1.5rem;
+    }
+
+    #refresh-btn {
+      background: none;
+      border: 1px solid #444;
+      color: #aaa;
+      padding: .35rem .8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .85rem;
+      margin-left: 1rem;
+      vertical-align: middle;
+      transition: border-color .15s, color .15s;
+    }
+    #refresh-btn:hover { border-color: #888; color: #fff; }
+
+    #camera-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      max-width: 960px;
+    }
+
+    .camera-card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .camera-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: .9rem 1.2rem;
+    }
+
+    .camera-name {
+      flex: 1;
+      font-weight: 500;
+      font-size: 1rem;
+    }
+
+    .badge {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      padding: .2rem .55rem;
+      border-radius: 4px;
+    }
+    .badge-connected    { background: #14532d; color: #4ade80; }
+    .badge-disconnected { background: #2a1a1a; color: #888; }
+
+    .btn {
+      border: none;
+      border-radius: 6px;
+      padding: .4rem .9rem;
+      font-size: .85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: .4; cursor: default; }
+    .btn-connect    { background: #166534; color: #bbf7d0; }
+    .btn-disconnect { background: #7f1d1d; color: #fca5a5; }
+    .btn-liveview   { background: #1e3a5f; color: #93c5fd; }
+    .btn-params     { background: #2d1f5e; color: #c4b5fd; }
+    .btn:not(:disabled):hover { opacity: .8; }
+
+    /* Collapsible panels */
+    .panel {
+      display: none;
+      border-top: 1px solid #2a2a2a;
+      padding: 1rem 1.2rem;
+      background: #111;
+    }
+    .panel.open { display: block; }
+
+    /* Live view */
+    .panel img {
+      display: block;
+      max-width: 100%;
+      border-radius: 6px;
+      background: #000;
+    }
+    .panel-error {
+      color: #f87171;
+      font-size: .85rem;
+      margin-top: .5rem;
+    }
+
+    /* Parameters */
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: .75rem;
+    }
+
+    .param-item {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: .65rem .85rem;
+    }
+
+    .param-label {
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: .35rem;
+    }
+
+    .param-current {
+      font-size: .95rem;
+      color: #fff;
+      margin-bottom: .4rem;
+    }
+
+    .param-select {
+      width: 100%;
+      background: #252525;
+      border: 1px solid #3a3a3a;
+      color: #e0e0e0;
+      border-radius: 5px;
+      padding: .3rem .5rem;
+      font-size: .82rem;
+      cursor: pointer;
+    }
+    .param-select:focus { outline: none; border-color: #666; }
+
+    .params-loading {
+      color: #555;
+      font-style: italic;
+      font-size: .9rem;
+    }
+
+    #empty {
+      color: #555;
+      font-style: italic;
+      padding: 1rem 0;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🎥 Bird Camera Server</h1>
-            <p>Serveur de streaming caméra en temps réel avec MJPEG</p>
-        </header>
-        
-        <div class="main-content">
-            <div class="card">
-                <h2>📷 Caméras disponibles</h2>
-                <div class="loading" id="loading">
-                    Chargement des caméras...
-                </div>
-                <ul class="cameras-list" id="cameras-list">
-                </ul>
-            </div>
-            
-            <div class="card">
-                <h2>Live Stream</h2>
-                <div class="video-container" id="video-container">
-                    <div class="no-stream">Sélectionnez une caméra pour démarrer</div>
-                </div>
-                <button onclick="stopStream()" style="width: 100%; margin-top: 10px;">⏹️ Arrêter le stream</button>
-            </div>
+  <h1>
+    Bird Camera Server
+    <button id="refresh-btn" onclick="loadCameras()">Refresh</button>
+  </h1>
+  <div id="camera-list"><p id="empty">Loading…</p></div>
+
+  <script>
+    const liveViews  = {};  // id → true
+    const paramPanels = {}; // id → true
+
+    async function api(method, path) {
+      const res = await fetch(path, { method });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      return res;
+    }
+
+    // -------------------------------------------------------------------------
+    // Camera list
+    // -------------------------------------------------------------------------
+
+    async function loadCameras() {
+      const list = document.getElementById('camera-list');
+      try {
+        const cameras = await api('GET', '/cameras').then(r => r.json());
+
+        const ids = new Set(cameras.map(c => c.id));
+        for (const id of Object.keys(liveViews))   if (!ids.has(id)) stopLiveView(id);
+        for (const id of Object.keys(paramPanels)) if (!ids.has(id)) closeParams(id);
+
+        if (cameras.length === 0) {
+          list.innerHTML = '<p id="empty">No camera detected.</p>';
+          return;
+        }
+
+        document.getElementById('empty')?.remove();
+
+        const existing = new Set([...list.querySelectorAll('.camera-card')].map(el => el.dataset.id));
+
+        for (const cam of cameras) {
+          if (existing.has(cam.id)) {
+            updateCard(cam);
+          } else {
+            list.appendChild(buildCard(cam));
+          }
+          existing.delete(cam.id);
+        }
+
+        for (const id of existing) {
+          document.querySelector(`.camera-card[data-id="${id}"]`)?.remove();
+        }
+
+      } catch (e) {
+        list.innerHTML = `<p id="empty">Error: ${e.message}</p>`;
+      }
+    }
+
+    function buildCard(cam) {
+      const card = document.createElement('div');
+      card.className = 'camera-card';
+      card.dataset.id = cam.id;
+      card.innerHTML = `
+        <div class="camera-header">
+          <span class="camera-name">${escHtml(cam.name)}</span>
+          <span class="badge"></span>
+          <button class="btn btn-connect"    onclick="connect('${cam.id}')">Connect</button>
+          <button class="btn btn-disconnect" onclick="disconnect('${cam.id}')">Disconnect</button>
+          <button class="btn btn-params"     onclick="toggleParams('${cam.id}')">Parameters</button>
+          <button class="btn btn-liveview"   onclick="toggleLiveView('${cam.id}')">Live view</button>
         </div>
-        
-        <div class="api-docs">
-            <h2>📚 Documentation API</h2>
-            
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <span class="path">/cameras</span>
-                <p class="description">Liste toutes les caméras disponibles avec leur index et nom</p>
-                <p><strong>Réponse:</strong> JSON array avec les caméras</p>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <span class="path">/snapshot/:camera_id</span>
-                <p class="description">Récupère un snapshot JPEG de la caméra spécifiée</p>
-                <p><strong>Paramètres:</strong> camera_id (entier)</p>
-                <p><strong>Réponse:</strong> Image JPEG</p>
-            </div>
-            
-            <div class="endpoint">
-                <span class="method">GET</span>
-                <span class="path">/stream/:camera_id</span>
-                <p class="description">Diffuse un flux MJPEG en continu de la caméra spécifiée</p>
-                <p><strong>Paramètres:</strong> camera_id (entier)</p>
-                <p><strong>Réponse:</strong> Stream MJPEG multipart/x-mixed-replace</p>
-            </div>
+        <div class="panel" id="params-panel-${cam.id}">
+          <div class="params-grid" id="params-grid-${cam.id}"></div>
+          <p class="panel-error" id="params-err-${cam.id}"></p>
         </div>
-    </div>
-    
-    <script>
-        // Load cameras on page load
-        document.addEventListener('DOMContentLoaded', loadCameras);
-        
-        let currentStreamUrl = null;
-        
-        async function loadCameras() {
-            const loading = document.getElementById('loading');
-            const list = document.getElementById('cameras-list');
-            
-            loading.classList.add('active');
-            list.innerHTML = '';
-            
-            try {
-                const response = await fetch('/cameras');
-                const cameras = await response.json();
-                
-                if (cameras.length === 0) {
-                    list.innerHTML = '<li>Aucune caméra trouvée</li>';
-                } else {
-                    cameras.forEach(camera => {
-                        const li = document.createElement('li');
-                        li.innerHTML = `
-                            <strong>${camera.name}</strong> (ID: ${camera.index})
-                            <div class="camera-actions">
-                                <button onclick="viewSnapshot(${camera.index})">📸 Photo</button>
-                                <button onclick="startStream(${camera.index})">▶️ Stream</button>
-                            </div>
-                        `;
-                        list.appendChild(li);
-                    });
-                }
-            } catch (error) {
-                list.innerHTML = '<li>Erreur lors du chargement des caméras: ' + error.message + '</li>';
-                console.error('Error:', error);
-            } finally {
-                loading.classList.remove('active');
-            }
-        }
-        
-        function viewSnapshot(cameraId) {
-            const container = document.getElementById('video-container');
-            container.innerHTML = `<img src="/snapshot/${cameraId}?t=${Date.now()}" alt="Snapshot">`;
-        }
-        
-        function startStream(cameraId) {
-            stopStream();
-            const container = document.getElementById('video-container');
-            const streamUrl = `/stream/${cameraId}`;
-            currentStreamUrl = streamUrl;
-            
-            const img = document.createElement('img');
-            img.src = streamUrl;
-            img.alt = 'Stream';
-            
-            container.innerHTML = '';
-            container.appendChild(img);
-            
-            console.log('Stream started for camera', cameraId);
-        }
-        
-        function stopStream() {
-            if (currentStreamUrl) {
-                const container = document.getElementById('video-container');
-                container.innerHTML = '<div class="no-stream">Stream arrêté</div>';
-                currentStreamUrl = null;
-            }
-        }
-        
-        // Refresh cameras every 5 seconds
-        setInterval(loadCameras, 5000);
-    </script>
+        <div class="panel" id="lv-${cam.id}">
+          <img id="lv-img-${cam.id}" alt="Live view">
+          <p class="panel-error" id="lv-err-${cam.id}"></p>
+        </div>`;
+      updateCard(cam, card);
+      return card;
+    }
+
+    function updateCard(cam, card) {
+      card = card ?? document.querySelector(`.camera-card[data-id="${cam.id}"]`);
+      if (!card) return;
+
+      const badge      = card.querySelector('.badge');
+      const btnConnect = card.querySelector('.btn-connect');
+      const btnDisconn = card.querySelector('.btn-disconnect');
+      const btnParams  = card.querySelector('.btn-params');
+      const btnLv      = card.querySelector('.btn-liveview');
+
+      if (cam.connected) {
+        badge.textContent    = 'Connected';
+        badge.className      = 'badge badge-connected';
+        btnConnect.disabled  = true;
+        btnDisconn.disabled  = false;
+        btnParams.disabled   = false;
+        btnLv.disabled       = false;
+      } else {
+        badge.textContent    = 'Disconnected';
+        badge.className      = 'badge badge-disconnected';
+        btnConnect.disabled  = false;
+        btnDisconn.disabled  = true;
+        btnParams.disabled   = true;
+        btnLv.disabled       = true;
+        if (liveViews[cam.id])   stopLiveView(cam.id);
+        if (paramPanels[cam.id]) closeParams(cam.id);
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // Connect / disconnect
+    // -------------------------------------------------------------------------
+
+    async function connect(id) {
+      try { await api('PUT', `/cameras/${id}/connect`); }
+      catch (e) { alert(`Connect failed: ${e.message}`); }
+      await loadCameras();
+    }
+
+    async function disconnect(id) {
+      stopLiveView(id);
+      closeParams(id);
+      try { await api('PUT', `/cameras/${id}/disconnect`); }
+      catch (e) { alert(`Disconnect failed: ${e.message}`); }
+      await loadCameras();
+    }
+
+    // -------------------------------------------------------------------------
+    // Parameters panel
+    // -------------------------------------------------------------------------
+
+    async function toggleParams(id) {
+      if (paramPanels[id]) {
+        closeParams(id);
+      } else {
+        await openParams(id);
+      }
+    }
+
+    async function openParams(id) {
+      const panel = document.getElementById(`params-panel-${id}`);
+      const grid  = document.getElementById(`params-grid-${id}`);
+      const err   = document.getElementById(`params-err-${id}`);
+
+      err.textContent  = '';
+      grid.innerHTML   = '<p class="params-loading">Loading…</p>';
+      panel.classList.add('open');
+      paramPanels[id]  = true;
+
+      const btn = document.querySelector(`.camera-card[data-id="${id}"] .btn-params`);
+      if (btn) btn.textContent = 'Hide params';
+
+      try {
+        const params = await api('GET', `/cameras/${id}/parameters`).then(r => r.json());
+        renderParams(id, params);
+      } catch (e) {
+        grid.innerHTML  = '';
+        err.textContent = `Failed to load parameters: ${e.message}`;
+      }
+    }
+
+    function closeParams(id) {
+      const panel = document.getElementById(`params-panel-${id}`);
+      if (!panel) return;
+      panel.classList.remove('open');
+      delete paramPanels[id];
+
+      const btn = document.querySelector(`.camera-card[data-id="${id}"] .btn-params`);
+      if (btn) btn.textContent = 'Parameters';
+    }
+
+    function renderParams(id, params) {
+      const grid = document.getElementById(`params-grid-${id}`);
+      if (!params.length) {
+        grid.innerHTML = '<p class="params-loading">No settable parameters for the current mode.</p>';
+        return;
+      }
+
+      grid.innerHTML = params.map(p => `
+        <div class="param-item">
+          <div class="param-label">${escHtml(formatParamName(p.type))}</div>
+          <div class="param-current">${escHtml(p.current)}</div>
+          <select class="param-select" title="${escHtml(p.type)}">
+            ${p.options.map(o => `
+              <option value="${o.value}" ${o.label === p.current ? 'selected' : ''}>
+                ${escHtml(o.label)}
+              </option>`).join('')}
+          </select>
+        </div>`).join('');
+    }
+
+    function formatParamName(type) {
+      return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // -------------------------------------------------------------------------
+    // Live view
+    // -------------------------------------------------------------------------
+
+    function toggleLiveView(id) {
+      liveViews[id] ? stopLiveView(id) : startLiveView(id);
+    }
+
+    function startLiveView(id) {
+      const panel = document.getElementById(`lv-${id}`);
+      const img   = document.getElementById(`lv-img-${id}`);
+      const err   = document.getElementById(`lv-err-${id}`);
+
+      err.textContent = '';
+      img.src = `/cameras/${id}/liveview`;
+      img.onerror = () => {
+        err.textContent = 'Stream interrupted — camera may have disconnected.';
+        stopLiveView(id);
+      };
+
+      panel.classList.add('open');
+      liveViews[id] = true;
+
+      const btn = document.querySelector(`.camera-card[data-id="${id}"] .btn-liveview`);
+      if (btn) btn.textContent = 'Stop';
+    }
+
+    function stopLiveView(id) {
+      const panel = document.getElementById(`lv-${id}`);
+      const img   = document.getElementById(`lv-img-${id}`);
+      if (!panel) return;
+
+      img.src = '';
+      panel.classList.remove('open');
+      delete liveViews[id];
+
+      const btn = document.querySelector(`.camera-card[data-id="${id}"] .btn-liveview`);
+      if (btn) btn.textContent = 'Live view';
+    }
+
+    // -------------------------------------------------------------------------
+    // Utils
+    // -------------------------------------------------------------------------
+
+    function escHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    loadCameras();
+    setInterval(loadCameras, 5000);
+  </script>
 </body>
 </html>
