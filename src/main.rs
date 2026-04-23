@@ -43,6 +43,15 @@ fn build_backends() -> BackendState {
         Err(e) => eprintln!("[error] Canon backend failed to initialize: {e}"),
     }
 
+    #[cfg(all(feature = "backend-avfoundation", target_os = "macos"))]
+    match backends::avfoundation::AvFoundationBackend::new() {
+        Ok(b) => {
+            let b: Arc<dyn camera::CameraBackend> = Arc::new(b);
+            map.insert(b.backend_id().to_string(), b);
+        }
+        Err(e) => eprintln!("[error] AVFoundation backend failed to initialize: {e}"),
+    }
+
     Arc::new(map)
 }
 

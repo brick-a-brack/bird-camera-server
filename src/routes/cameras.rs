@@ -187,7 +187,14 @@ pub async fn live_view(State(state): State<AppState>, Path(id): Path<String>) ->
             let native_id = dev_id.native_id.clone();
 
             tokio::spawn(async move {
+                // Cap at 60 fps (≈16 ms/frame). Backends slower than this run
+                // at their natural pace; fast backends (AVFoundation) are
+                // prevented from spinning at CPU speed.
+                let frame_interval = tokio::time::Duration::from_millis(16);
+
                 loop {
+                    let tick = tokio::time::Instant::now();
+
                     // No subscribers left — stop.
                     if tx.receiver_count() == 0 {
                         break;
@@ -215,13 +222,17 @@ pub async fn live_view(State(state): State<AppState>, Path(id): Path<String>) ->
                         }
                         Ok(Err(crate::camera::CameraError::SdkError(0x0000_A102))) => {
                             // EDS_ERR_OBJECT_NOTREADY: EVF not ready yet, skip frame.
-                            continue;
                         }
                         Ok(Err(e)) => {
                             eprintln!("[error] live view frame error for {native_id}: {e}");
                             break;
                         }
                         Err(_) => break, // spawn_blocking panicked
+                    }
+
+                    let elapsed = tick.elapsed();
+                    if elapsed < frame_interval {
+                        tokio::time::sleep(frame_interval - elapsed).await;
                     }
                 }
             });

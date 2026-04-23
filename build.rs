@@ -1,13 +1,30 @@
 use std::path::Path;
 
 fn main() {
-    // Re-run this script if the external SDK directory changes.
     println!("cargo:rerun-if-changed=external/EDSDK");
+    println!("cargo:rerun-if-changed=src/backends/avfoundation_bridge.m");
+    println!("cargo:rerun-if-changed=src/backends/avfoundation_bridge.h");
 
     if std::env::var_os("CARGO_FEATURE_BACKEND_CANON").is_some() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
         link_canon_sdk(&manifest_dir);
         copy_canon_dlls(&manifest_dir);
+    }
+
+    if cfg!(target_os = "macos")
+        && std::env::var_os("CARGO_FEATURE_BACKEND_AVFOUNDATION").is_some()
+    {
+        cc::Build::new()
+            .file("src/backends/avfoundation_bridge.m")
+            .flag("-fobjc-arc")
+            .flag("-fmodules")
+            .compile("webcam_macos_bridge");
+
+        println!("cargo:rustc-link-lib=framework=AVFoundation");
+        println!("cargo:rustc-link-lib=framework=CoreMedia");
+        println!("cargo:rustc-link-lib=framework=CoreVideo");
+        println!("cargo:rustc-link-lib=framework=CoreImage");
+        println!("cargo:rustc-link-lib=framework=Foundation");
     }
 }
 
@@ -28,7 +45,6 @@ fn link_canon_sdk(manifest_dir: &str) {
             manifest_dir
         );
         println!("cargo:rustc-link-lib=framework=EDSDK");
-        // Embed the framework search path as an rpath so dyld finds it at runtime.
         println!(
             "cargo:rustc-link-arg=-Wl,-rpath,{}/external/EDSDK/EDSDKv132010M",
             manifest_dir
@@ -48,7 +64,6 @@ fn link_canon_sdk(manifest_dir: &str) {
 fn copy_canon_dlls(manifest_dir: &str) {
     #[cfg(target_os = "windows")]
     {
-        // OUT_DIR is target/<profile>/build/<crate>-<hash>/out — go up 3 levels to reach target/<profile>/
         let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
         let profile_dir = Path::new(&out_dir)
             .ancestors()
