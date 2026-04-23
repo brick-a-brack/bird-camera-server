@@ -14,6 +14,8 @@ use tokio::sync::{broadcast, Mutex};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
+use serde::Deserialize;
+
 use crate::camera::{CameraBackend, CameraError, DeviceId, DeviceInfo};
 
 // ---------------------------------------------------------------------------
@@ -241,6 +243,71 @@ pub async fn live_view(State(state): State<AppState>, Path(id): Path<String>) ->
         )
         .body(Body::from_stream(stream))
         .unwrap()
+}
+
+#[derive(Deserialize)]
+pub struct SetParameterBody {
+    #[serde(rename = "type")]
+    kind: String,
+    value: i32,
+}
+
+pub async fn set_parameter(
+    State(backends): State<BackendState>,
+    Path(id): Path<String>,
+    Json(body): Json<SetParameterBody>,
+) -> Response {
+    let dev_id = match DeviceId::decode(&id) {
+        Ok(d) => d,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "invalid device id" })),
+            )
+                .into_response()
+        }
+    };
+
+    let backend = match backends.get(&dev_id.backend) {
+        Some(b) => b.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("unknown backend: {}", dev_id.backend) })),
+            )
+                .into_response()
+        }
+    };
+
+    let native_id = dev_id.native_id.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        backend.set_parameter(&native_id, &body.kind, body.value)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(())) => StatusCode::OK.into_response(),
+        Ok(Err(CameraError::NotConnected)) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "device is not connected" })),
+        )
+            .into_response(),
+        Ok(Err(CameraError::NotSupported)) => (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "error": "unknown parameter type" })),
+        )
+            .into_response(),
+        Ok(Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "internal error" })),
+        )
+            .into_response(),
+    }
 }
 
 // ---------------------------------------------------------------------------

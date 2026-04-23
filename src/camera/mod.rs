@@ -127,4 +127,8 @@ pub trait CameraBackend: Send + Sync {
     /// Captures a single live view frame and returns it as raw JPEG bytes.
     /// The device must be connected before calling this.
     fn get_live_view_frame(&self, native_id: &str) -> Result<Vec<u8>, CameraError>;
+
+    /// Sets a camera parameter by its type name and raw SDK value.
+    /// The device must be connected before calling this.
+    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError>;
 }

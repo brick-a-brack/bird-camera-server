@@ -131,6 +131,12 @@ enum Command {
         device_id: String,
         reply: mpsc::Sender<Result<Vec<u8>, CameraError>>,
     },
+    SetParameter {
+        device_id: String,
+        prop_id: u32,
+        value: i32,
+        reply: mpsc::Sender<Result<(), CameraError>>,
+    },
     Shutdown,
 }
 
@@ -253,6 +259,22 @@ impl CameraBackend for CanonBackend {
             .recv()
             .unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
     }
+
+    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError> {
+        let prop_id = kind_to_prop_id(kind).ok_or(CameraError::NotSupported)?;
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.tx
+            .send(Command::SetParameter {
+                device_id: native_id.to_string(),
+                prop_id,
+                value,
+                reply: reply_tx,
+            })
+            .map_err(|_| CameraError::SdkError(0xFFFF_FFFF))?;
+        reply_rx
+            .recv()
+            .unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +325,9 @@ fn sdk_thread(rx: mpsc::Receiver<Command>, init_tx: mpsc::Sender<Result<(), Came
             }
             Ok(Command::GetLiveViewFrame { device_id, reply }) => {
                 let _ = reply.send(get_live_view_frame_impl(&device_id, &connected));
+            }
+            Ok(Command::SetParameter { device_id, prop_id, value, reply }) => {
+                let _ = reply.send(set_parameter_impl(&device_id, prop_id, value, &connected));
             }
             Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -609,6 +634,48 @@ fn get_parameters_impl(
     }
 
     Ok(result)
+}
+
+fn kind_to_prop_id(kind: &str) -> Option<u32> {
+    match kind {
+        "aperture"             => Some(PROP_AV),
+        "shutter_speed"        => Some(PROP_TV),
+        "iso"                  => Some(PROP_ISO),
+        "white_balance"        => Some(PROP_WHITE_BALANCE),
+        "color_temperature"    => Some(PROP_COLOR_TEMPERATURE),
+        "metering_mode"        => Some(PROP_METERING_MODE),
+        "af_mode"              => Some(PROP_AF_MODE),
+        "drive_mode"           => Some(PROP_DRIVE_MODE),
+        "exposure_compensation"=> Some(PROP_EXPOSURE_COMP),
+        _ => None,
+    }
+}
+
+fn set_parameter_impl(
+    device_id: &str,
+    prop_id: u32,
+    value: i32,
+    connected: &HashMap<String, EdsCameraRef>,
+) -> Result<(), CameraError> {
+    let camera_ref = connected
+        .get(device_id)
+        .copied()
+        .ok_or(CameraError::NotConnected)?;
+
+    let err = unsafe {
+        EdsSetPropertyData(
+            camera_ref,
+            prop_id,
+            0,
+            std::mem::size_of::<i32>() as u32,
+            &value as *const i32 as *const std::ffi::c_void,
+        )
+    };
+
+    if err != EDS_ERR_OK {
+        return Err(CameraError::SdkError(err));
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

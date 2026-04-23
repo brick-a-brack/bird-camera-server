@@ -179,11 +179,16 @@
     const liveViews  = {};  // id → true
     const paramPanels = {}; // id → true
 
-    async function api(method, path) {
-      const res = await fetch(path, { method });
+    async function api(method, path, body) {
+      const opts = { method };
+      if (body !== undefined) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(path, opts);
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `HTTP ${res.status}`);
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
       }
       return res;
     }
@@ -355,13 +360,45 @@
         <div class="param-item">
           <div class="param-label">${escHtml(formatParamName(p.type))}</div>
           <div class="param-current">${escHtml(p.current)}</div>
-          <select class="param-select" title="${escHtml(p.type)}">
+          <select class="param-select" data-device-id="${escHtml(id)}" data-kind="${escHtml(p.type)}">
             ${p.options.map(o => `
               <option value="${o.value}" ${o.label === p.current ? 'selected' : ''}>
                 ${escHtml(o.label)}
               </option>`).join('')}
           </select>
         </div>`).join('');
+
+      grid.querySelectorAll('.param-select').forEach(select => {
+        select.addEventListener('change', () => setParameter(select));
+      });
+    }
+
+    async function setParameter(select) {
+      const deviceId = select.dataset.deviceId;
+      const kind     = select.dataset.kind;
+      const value    = parseInt(select.value, 10);
+
+      select.disabled = true;
+      try {
+        await api('PUT', `/cameras/${deviceId}/settings`, { type: kind, value });
+      } catch (e) {
+        alert(`Failed to set ${formatParamName(kind)}: ${e.message}`);
+      } finally {
+        // Silently refresh params in-place — no loading flash.
+        await refreshParams(deviceId);
+      }
+    }
+
+    async function refreshParams(id) {
+      const grid = document.getElementById(`params-grid-${id}`);
+      const err  = document.getElementById(`params-err-${id}`);
+      try {
+        const params = await api('GET', `/cameras/${id}/parameters`).then(r => r.json());
+        err.textContent = '';
+        renderParams(id, params);
+      } catch (e) {
+        err.textContent = `Failed to reload parameters: ${e.message}`;
+      }
     }
 
     function formatParamName(type) {
