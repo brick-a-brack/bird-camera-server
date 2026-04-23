@@ -2,7 +2,7 @@
 @import ImageIO;
 @import Foundation;
 
-#include "avfoundation_bridge.h"
+#include "bridge.h"
 #include <stdlib.h>
 #include <string.h>
 
