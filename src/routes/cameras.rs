@@ -187,10 +187,10 @@ pub async fn live_view(State(state): State<AppState>, Path(id): Path<String>) ->
             let native_id = dev_id.native_id.clone();
 
             tokio::spawn(async move {
-                // Cap at 60 fps (≈16 ms/frame). Backends slower than this run
+                // Cap at 30 fps (≈32 ms/frame). Backends slower than this run
                 // at their natural pace; fast backends (AVFoundation) are
                 // prevented from spinning at CPU speed.
-                let frame_interval = tokio::time::Duration::from_millis(16);
+                let frame_interval = tokio::time::Duration::from_millis(32);
 
                 loop {
                     let tick = tokio::time::Instant::now();
