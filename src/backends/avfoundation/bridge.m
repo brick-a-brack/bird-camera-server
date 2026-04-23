@@ -117,11 +117,12 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 @end
 
 // ---------------------------------------------------------------------------
-// WcSessionHandle — groups session + output + delegate into one object
+// WcSessionHandle — groups session + output + delegate + device
 // ---------------------------------------------------------------------------
 
 @interface WcSessionHandle : NSObject
 @property (nonatomic, strong) AVCaptureSession  *session;
+@property (nonatomic, strong) AVCaptureDevice   *device;
 @property (nonatomic, strong) WcFrameDelegate   *delegate;
 @property (nonatomic, strong) dispatch_queue_t   captureQueue;
 @end
@@ -130,7 +131,18 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 @end
 
 // ---------------------------------------------------------------------------
-// C interface
+// Helper: append one option (no-op if already full)
+// ---------------------------------------------------------------------------
+
+static void push_option(WcParamDesc *p, int value, const char *label) {
+    if (p->num_options >= WC_MAX_OPTIONS) return;
+    p->options[p->num_options].value = value;
+    strlcpy(p->options[p->num_options].label, label, WC_MAX_LABEL);
+    p->num_options++;
+}
+
+// ---------------------------------------------------------------------------
+// C interface — session management
 // ---------------------------------------------------------------------------
 
 int wc_list_devices(WcDeviceInfo *out, int capacity) {
@@ -198,6 +210,7 @@ void *wc_open_session(const char *unique_id) {
 
     WcSessionHandle *handle = [[WcSessionHandle alloc] init];
     handle.session      = session;
+    handle.device       = device;
     handle.delegate     = delegate;
     handle.captureQueue = q;
 
@@ -228,4 +241,114 @@ int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
 
 void wc_free_frame(uint8_t *data) {
     free(data);
+}
+
+// ---------------------------------------------------------------------------
+// C interface — parameter enumeration
+// ---------------------------------------------------------------------------
+
+int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
+    if (!handle || !out || capacity <= 0) return 0;
+    WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
+    AVCaptureDevice *dev = h.device;
+    if (!dev) return 0;
+
+    int count = 0;
+
+    // --- Focus mode ---
+    if (count < capacity) {
+        WcParamDesc *p = &out[count];
+        memset(p, 0, sizeof(*p));
+        strlcpy(p->kind, "focus_mode", WC_MAX_KIND);
+        p->current = (int)dev.focusMode;
+        typedef struct { AVCaptureFocusMode m; const char *l; } FM;
+        FM table[] = {
+            { AVCaptureFocusModeLocked,              "Locked"         },
+            { AVCaptureFocusModeAutoFocus,           "Auto"           },
+            { AVCaptureFocusModeContinuousAutoFocus, "Continuous Auto"},
+        };
+        for (int i = 0; i < 3; i++)
+            if ([dev isFocusModeSupported:table[i].m])
+                push_option(p, (int)table[i].m, table[i].l);
+        if (p->num_options >= 2) count++;
+    }
+
+    // --- Exposure mode ---
+    if (count < capacity) {
+        WcParamDesc *p = &out[count];
+        memset(p, 0, sizeof(*p));
+        strlcpy(p->kind, "exposure_mode", WC_MAX_KIND);
+        p->current = (int)dev.exposureMode;
+        typedef struct { AVCaptureExposureMode m; const char *l; } EM;
+        EM table[] = {
+            { AVCaptureExposureModeLocked,                "Locked"         },
+            { AVCaptureExposureModeAutoExpose,            "Auto"           },
+            { AVCaptureExposureModeContinuousAutoExposure,"Continuous Auto"},
+        };
+        for (int i = 0; i < 3; i++)
+            if ([dev isExposureModeSupported:table[i].m])
+                push_option(p, (int)table[i].m, table[i].l);
+        if (p->num_options >= 2) count++;
+    }
+
+    // --- White balance mode ---
+    if (count < capacity) {
+        WcParamDesc *p = &out[count];
+        memset(p, 0, sizeof(*p));
+        strlcpy(p->kind, "white_balance_mode", WC_MAX_KIND);
+        p->current = (int)dev.whiteBalanceMode;
+        typedef struct { AVCaptureWhiteBalanceMode m; const char *l; } WM;
+        WM table[] = {
+            { AVCaptureWhiteBalanceModeLocked,                    "Locked"         },
+            { AVCaptureWhiteBalanceModeAutoWhiteBalance,          "Auto"           },
+            { AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance,"Continuous Auto"},
+        };
+        for (int i = 0; i < 3; i++)
+            if ([dev isWhiteBalanceModeSupported:table[i].m])
+                push_option(p, (int)table[i].m, table[i].l);
+        if (p->num_options >= 2) count++;
+    }
+
+    return count;
+}
+
+// ---------------------------------------------------------------------------
+// C interface — parameter setting
+// ---------------------------------------------------------------------------
+
+int wc_set_parameter(void *handle, const char *kind, int value) {
+    if (!handle || !kind) return -1;
+    WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
+    AVCaptureDevice *dev = h.device;
+    if (!dev) return -1;
+
+    NSError *error = nil;
+    if (![dev lockForConfiguration:&error]) return -1;
+
+    BOOL ok = YES;
+
+    if (strcmp(kind, "focus_mode") == 0) {
+        AVCaptureFocusMode m = (AVCaptureFocusMode)value;
+        if ([dev isFocusModeSupported:m]) {
+            dev.focusMode = m;
+        } else { ok = NO; }
+
+    } else if (strcmp(kind, "exposure_mode") == 0) {
+        AVCaptureExposureMode m = (AVCaptureExposureMode)value;
+        if ([dev isExposureModeSupported:m]) {
+            dev.exposureMode = m;
+        } else { ok = NO; }
+
+    } else if (strcmp(kind, "white_balance_mode") == 0) {
+        AVCaptureWhiteBalanceMode m = (AVCaptureWhiteBalanceMode)value;
+        if ([dev isWhiteBalanceModeSupported:m]) {
+            dev.whiteBalanceMode = m;
+        } else { ok = NO; }
+
+    } else {
+        ok = NO;
+    }
+
+    [dev unlockForConfiguration];
+    return ok ? 0 : -1;
 }
