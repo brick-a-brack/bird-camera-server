@@ -24,16 +24,21 @@ const EDS_PROP_EVF_OUTPUT_DEVICE: u32 = 0x00000500;
 // kEdsEvfOutputDevice_PC
 const EDS_EVF_OUTPUT_DEVICE_PC: u32 = 2;
 
-// Shooting property IDs
-const PROP_TV:                   u32 = 0x00000400; // Shutter speed
-const PROP_AV:                   u32 = 0x00000401; // Aperture
-const PROP_ISO:                  u32 = 0x00000402; // ISO speed
-const PROP_WHITE_BALANCE:        u32 = 0x00000106;
-const PROP_COLOR_TEMPERATURE:    u32 = 0x00000107;
-const PROP_METERING_MODE:        u32 = 0x00000413;
-const PROP_AF_MODE:              u32 = 0x00000304;
-const PROP_DRIVE_MODE:           u32 = 0x00000224;
-const PROP_EXPOSURE_COMP:        u32 = 0x00000416;
+// kEdsCameraCommand_ExtendShutDownTimer
+const CMD_EXTEND_SHUTDOWN_TIMER: u32 = 0x00000001;
+// Keep-alive interval: reset the sleep timer every 30 s for connected cameras.
+const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
+
+// Shooting property IDs — from EDSDKTypes.h
+const PROP_DRIVE_MODE:           u32 = 0x00000401; // kEdsPropID_DriveMode
+const PROP_ISO:                  u32 = 0x00000402; // kEdsPropID_ISOSpeed
+const PROP_METERING_MODE:        u32 = 0x00000403; // kEdsPropID_MeteringMode
+const PROP_AF_MODE:              u32 = 0x00000404; // kEdsPropID_AFMode
+const PROP_AV:                   u32 = 0x00000405; // kEdsPropID_Av
+const PROP_TV:                   u32 = 0x00000406; // kEdsPropID_Tv
+const PROP_EXPOSURE_COMP:        u32 = 0x00000407; // kEdsPropID_ExposureCompensation
+const PROP_WHITE_BALANCE:        u32 = 0x00000106; // kEdsPropID_WhiteBalance
+const PROP_COLOR_TEMPERATURE:    u32 = 0x00000107; // kEdsPropID_ColorTemperature
 
 #[repr(C)]
 struct EdsPropertyDesc {
@@ -88,6 +93,11 @@ extern "C" {
         in_ref: EdsBaseRef,
         in_property_id: u32,
         out_property_desc: *mut EdsPropertyDesc,
+    ) -> u32;
+    fn EdsSendCommand(
+        in_camera_ref: EdsCameraRef,
+        in_command: u32,
+        in_param: i32,
     ) -> u32;
     fn EdsRelease(in_ref: EdsBaseRef) -> u32;
     fn EdsGetEvent() -> u32;
@@ -262,9 +272,18 @@ fn sdk_thread(rx: mpsc::Receiver<Command>, init_tx: mpsc::Sender<Result<(), Came
 
     // Camera refs for open sessions. Raw pointers never leave this thread.
     let mut connected: HashMap<String, EdsCameraRef> = HashMap::new();
+    let mut last_keepalive = std::time::Instant::now();
 
     loop {
         unsafe { EdsGetEvent() };
+
+        // Reset the auto-power-off timer for every connected camera every 30 s.
+        if last_keepalive.elapsed() >= KEEPALIVE_INTERVAL {
+            for &camera_ref in connected.values() {
+                unsafe { EdsSendCommand(camera_ref, CMD_EXTEND_SHUTDOWN_TIMER, 0) };
+            }
+            last_keepalive = std::time::Instant::now();
+        }
 
         match rx.recv_timeout(Duration::from_millis(16)) {
             Ok(Command::ListDevices { reply }) => {
@@ -601,19 +620,20 @@ fn decode_av(code: i32) -> String {
         0x08 => "f/1",
         0x0B => "f/1.1",
         0x0C => "f/1.2",
-        0x0D => "f/1.2",
+        0x0D => "f/1.2 (1/3)",
         0x10 => "f/1.4",
         0x13 => "f/1.6",
         0x14 => "f/1.8",
-        0x15 => "f/1.8",
+        0x15 => "f/1.8 (1/3)",
         0x18 => "f/2",
         0x1B => "f/2.2",
         0x1C => "f/2.5",
-        0x1D => "f/2.5",
+        0x1D => "f/2.5 (1/3)",
         0x20 => "f/2.8",
         0x23 => "f/3.2",
+        0x85 => "f/3.4",
         0x24 => "f/3.5",
-        0x25 => "f/3.5",
+        0x25 => "f/3.5 (1/3)",
         0x28 => "f/4",
         0x2B => "f/4.5",
         0x2C => "f/4.5",
@@ -627,7 +647,7 @@ fn decode_av(code: i32) -> String {
         0x3C => "f/9.5",
         0x3D => "f/10",
         0x40 => "f/11",
-        0x43 => "f/13",
+        0x43 => "f/13 (1/3)",
         0x44 => "f/13",
         0x45 => "f/14",
         0x48 => "f/16",
@@ -639,6 +659,19 @@ fn decode_av(code: i32) -> String {
         0x54 => "f/27",
         0x55 => "f/29",
         0x58 => "f/32",
+        0x5B => "f/36",
+        0x5C => "f/38",
+        0x5D => "f/40",
+        0x60 => "f/45",
+        0x63 => "f/51",
+        0x64 => "f/54",
+        0x65 => "f/57",
+        0x68 => "f/64",
+        0x6B => "f/72",
+        0x6C => "f/76",
+        0x6D => "f/80",
+        0x70 => "f/91",
+        -1   => "Not valid", // 0xffffffff
         _ => return format!("0x{code:02X}"),
     };
     label.to_string()
@@ -646,72 +679,86 @@ fn decode_av(code: i32) -> String {
 
 fn decode_tv(code: i32) -> String {
     let label = match code {
-        0x0C => "30\"",
-        0x10 => "20\"",
-        0x13 => "15\"",
-        0x14 => "13\"",
-        0x15 => "10\"",
-        0x18 => "8\"",
-        0x1B => "6\"",
-        0x1C => "5\"",
-        0x1D => "4\"",
-        0x20 => "3\"",
-        0x23 => "2.5\"",
-        0x24 => "2\"",
-        0x25 => "1.6\"",
-        0x28 => "1.3\"",
-        0x2B => "1\"",
-        0x2C => "0.8\"",
-        0x2D => "0.6\"",
-        0x30 => "1/2",
-        0x33 => "1/2.5",
-        0x34 => "1/3",
-        0x35 => "1/3.2",
-        0x38 => "1/4",
-        0x3B => "1/5",
-        0x3C => "1/6",
-        0x3D => "1/6",
-        0x40 => "1/8",
-        0x43 => "1/10",
-        0x44 => "1/10",
-        0x45 => "1/13",
-        0x48 => "1/15",
-        0x4B => "1/20",
-        0x4C => "1/20",
-        0x4D => "1/25",
-        0x50 => "1/30",
-        0x53 => "1/40",
-        0x54 => "1/45",
-        0x55 => "1/50",
-        0x58 => "1/60",
-        0x5B => "1/80",
-        0x5C => "1/90",
-        0x5D => "1/100",
-        0x60 => "1/125",
-        0x63 => "1/160",
-        0x64 => "1/180",
-        0x65 => "1/200",
-        0x68 => "1/250",
-        0x6B => "1/320",
-        0x6C => "1/350",
-        0x6D => "1/400",
-        0x70 => "1/500",
-        0x73 => "1/640",
-        0x74 => "1/750",
-        0x75 => "1/800",
-        0x78 => "1/1000",
-        0x7B => "1/1250",
-        0x7C => "1/1500",
-        0x7D => "1/1600",
-        0x80 => "1/2000",
-        0x83 => "1/2500",
-        0x84 => "1/3000",
-        0x85 => "1/3200",
-        0x88 => "1/4000",
-        0x8B => "1/5000",
-        0x8C => "1/6000",
-        0x8D => "1/6400",
-        0x90 => "1/8000",
+        0x0C => "Bulb",
+        0x10 => "30s",
+        0x13 => "25s",
+        0x14 => "20s",
+        0x15 => "20s (1/3)",
+        0x18 => "15s",
+        0x1B => "13s",
+        0x1C => "10s",
+        0x1D => "10s (1/3)",
+        0x20 => "8s",
+        0x23 => "6s",
+        0x24 => "6s (1/3)",
+        0x25 => "5s",
+        0x28 => "4s",
+        0x2B => "3.2s",
+        0x2C => "3s",
+        0x2D => "2.5s",
+        0x30 => "2s",
+        0x33 => "1.6s",
+        0x34 => "1.5s",
+        0x35 => "1.3s",
+        0x38 => "1s",
+        0x3B => "0.8s",
+        0x3C => "0.7s",
+        0x3D => "0.6s",
+        0x40 => "0.5s",
+        0x43 => "0.4s",
+        0x44 => "0.3s (1/3)",
+        0x45 => "0.3s",
+        0x48 => "1/4",
+        0x4B => "1/5 (1/3)",
+        0x4C => "1/5",
+        0x4D => "1/6 (1/3)",
+        0x50 => "1/8",
+        0x53 => "1/10 (1/3)",
+        0x54 => "1/10",
+        0x55 => "1/13",
+        0x58 => "1/15",
+        0x5B => "1/20 (1/3)",
+        0x5C => "1/20",
+        0x5D => "1/25",
+        0x60 => "1/30",
+        0x63 => "1/40",
+        0x64 => "1/45",
+        0x65 => "1/50",
+        0x68 => "1/60",
+        0x6B => "1/80",
+        0x6C => "1/90",
+        0x6D => "1/100",
+        0x70 => "1/125",
+        0x73 => "1/160",
+        0x74 => "1/180",
+        0x75 => "1/200",
+        0x78 => "1/250",
+        0x7B => "1/320",
+        0x7C => "1/350",
+        0x7D => "1/400",
+        0x80 => "1/500",
+        0x83 => "1/640",
+        0x84 => "1/750",
+        0x85 => "1/800",
+        0x88 => "1/1000",
+        0x8B => "1/1250",
+        0x8C => "1/1500",
+        0x8D => "1/1600",
+        0x90 => "1/2000",
+        0x93 => "1/2500",
+        0x94 => "1/3000",
+        0x95 => "1/3200",
+        0x98 => "1/4000",
+        0x9B => "1/5000",
+        0x9C => "1/6000",
+        0x9D => "1/6400",
+        0xA0 => "1/8000",
+        0xA5 => "1/12800",
+        0xA8 => "1/16000",
+        0xAB => "1/20000",
+        0xAD => "1/25600",
+        0xB0 => "1/32000",
+        -1   => "Not valid", // 0xffffffff
         _ => return format!("0x{code:02X}"),
     };
     label.to_string()
@@ -720,6 +767,9 @@ fn decode_tv(code: i32) -> String {
 fn decode_iso(code: i32) -> String {
     match code {
         0x00 => "Auto".to_string(),
+        0x28 => "6".to_string(),
+        0x30 => "12".to_string(),
+        0x38 => "25".to_string(),
         0x40 => "50".to_string(),
         0x48 => "100".to_string(),
         0x4B => "125".to_string(),
@@ -743,9 +793,18 @@ fn decode_iso(code: i32) -> String {
         0x7B => "8000".to_string(),
         0x7D => "10000".to_string(),
         0x80 => "12800".to_string(),
+        0x83 => "16000".to_string(),
+        0x85 => "20000".to_string(),
         0x88 => "25600".to_string(),
+        0x8B => "32000".to_string(),
+        0x8D => "40000".to_string(),
         0x90 => "51200".to_string(),
+        0x93 => "64000".to_string(),
+        0x95 => "80000".to_string(),
         0x98 => "102400".to_string(),
+        0xA0 => "204800".to_string(),
+        0xA8 => "409600".to_string(),
+        0xB0 => "819200".to_string(),
         _ => format!("0x{code:02X}"),
     }
 }

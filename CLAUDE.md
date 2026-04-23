@@ -24,12 +24,15 @@ The API is consumed locally — it binds exclusively to `127.0.0.1`, no authenti
 
 ### CameraBackend trait
 - Every backend must implement the `CameraBackend` trait defined in `src/camera/mod.rs`.
-- The trait covers: `backend_id`, `list_devices`, `connect`, `disconnect`. Future methods: `capture_photo`, `live_view`, `get_capabilities`, `get_settings`, `set_settings`.
+- Current trait methods: `backend_id`, `list_devices`, `connect`, `disconnect`, `is_connected`, `get_parameters`, `get_live_view_frame`.
+- Future methods: `capture_photo`, `set_parameter`.
 - `backend_id()` returns the backend's unique name (e.g. `"canon"`). It is used to build opaque device IDs and to key the backend registry.
 - Route handlers must only interact with the `CameraBackend` trait — never with a concrete backend type.
 
-### Backend registry
+### Backend registry & app state
 - `BackendState` is `Arc<HashMap<String, Arc<dyn CameraBackend>>>`, keyed by `backend_id()`.
+- The axum app state is `AppState` (in `src/routes/cameras.rs`), which wraps both `BackendState` and `LiveViewSenders`.
+- `FromRef<AppState> for BackendState` is implemented so handlers that only need backends can extract `State<BackendState>` directly.
 - Backends are registered at startup in `build_backends()` in `main.rs`.
 - If a backend fails to initialize (e.g. SDK DLL not found), it is skipped with an error log — the server starts anyway.
 - Each backend is gated behind a Cargo feature flag: `backend-canon`, `backend-nikon`, `backend-webcam-linux`, `backend-webcam-windows`, `backend-webcam-macos`.
@@ -42,18 +45,33 @@ The API is consumed locally — it binds exclusively to `127.0.0.1`, no authenti
 - Communication between the backend and its SDK thread uses `std::sync::mpsc` channels (actor pattern).
 - The SDK thread holds all Canon-internal state (open session refs, etc.) — raw pointers never leave the thread.
 - `EdsInitializeSDK` / `EdsTerminateSDK` are called on the SDK thread, not on the main thread.
+- EVF (live view) output is enabled once at `connect` time via `EdsSetPropertyData(kEdsPropID_Evf_OutputDevice, kEdsEvfOutputDevice_PC)` — not on every frame.
 
-### Camera capabilities
-- Parameters (aperture, ISO, exposure, focus, white balance, etc.) are discovered dynamically at connection time via `get_capabilities()` (to be implemented).
-- Capabilities depend on both the backend and the connected device — no hardcoded schema.
-- The API response for capabilities must include: current value + list of available values for each supported parameter.
+### Camera parameters
+- `get_parameters(native_id)` returns only the **currently settable** parameters for the connected device.
+- Uses `EdsGetPropertyDesc` to get allowed values and access level per property. Properties with `access == 0` (read-only) or `num_elements == 0` are excluded.
+- The allowed values depend on the camera's current exposure mode (e.g. Tv is read-only in Av mode).
+- Response format: `[{ type, current, options: [{ label, value }] }]` where `value` is the raw SDK i32 code.
+- Canon property IDs (from `EDSDKTypes.h`):
+  - `kEdsPropID_DriveMode`           = `0x00000401`
+  - `kEdsPropID_ISOSpeed`            = `0x00000402`
+  - `kEdsPropID_MeteringMode`        = `0x00000403`
+  - `kEdsPropID_AFMode`              = `0x00000404`
+  - `kEdsPropID_Av`                  = `0x00000405`
+  - `kEdsPropID_Tv`                  = `0x00000406`
+  - `kEdsPropID_ExposureCompensation`= `0x00000407`
+  - `kEdsPropID_WhiteBalance`        = `0x00000106`
+  - `kEdsPropID_ColorTemperature`    = `0x00000107`
+  - `kEdsPropID_Evf_OutputDevice`    = `0x00000500`
+- **Do not guess property IDs** — always verify in `external/EDSDK/EDSDKv132010W/Windows/EDSDK/Header/EDSDKTypes.h`.
 
 ### Live view & streaming
 - Live view is served as MJPEG over HTTP (`multipart/x-mixed-replace; boundary=frame`).
-- Target framerate: 30–60 fps.
-- Each camera has one capture loop (tokio task) that pushes frames into a `tokio::sync::broadcast` channel.
-- Multiple HTTP clients can subscribe to the same camera stream simultaneously.
-- The broadcast buffer must drop old frames when a client is slow — never block the capture loop.
+- `LiveViewSenders` = `Arc<Mutex<HashMap<String, broadcast::Sender<Arc<Bytes>>>>>` — one sender per active device (keyed by opaque device ID).
+- Only one capture loop runs per device regardless of how many clients are connected. The loop starts when the first client subscribes and stops when the last one disconnects.
+- `EDS_ERR_OBJECT_NOTREADY` (0x0000A102) during frame capture is skipped (continue), not fatal.
+- The route checks `is_connected` via `spawn_blocking` **before** sending any HTTP headers — returns 409 if not connected.
+- Broadcast buffer capacity: 4 frames (drops old frames if clients are slow).
 - No frames are ever written to disk — everything is in-memory and streamed directly.
 
 ### Photo capture
@@ -72,30 +90,46 @@ The API is consumed locally — it binds exclusively to `127.0.0.1`, no authenti
 
 ### Current routes
 ```
-GET  /                               — healthcheck
-GET  /cameras                        — list all devices across all active backends
+GET  /                               — web UI (embedded HTML, served from binary via include_str!)
+GET  /health                         — healthcheck JSON
+GET  /cameras                        — list all devices across all active backends (includes connected: bool)
 PUT  /cameras/{id}/connect           — open a session with a device
 PUT  /cameras/{id}/disconnect        — close a session with a device
+GET  /cameras/{id}/parameters        — list settable parameters with current value and allowed options (requires connected)
+GET  /cameras/{id}/liveview          — MJPEG stream (requires connected, returns 409 if not)
 ```
+
+### Web UI
+- Single-page HTML embedded in the binary via `include_str!("../static/index.html")`.
+- Source file: `static/index.html` — no external assets, everything inline.
+- Features: camera list with connected badge, connect/disconnect buttons, collapsible parameters panel, live view toggle.
+- Auto-refreshes camera list every 5 seconds.
 
 ## Canon SDK
 - SDK files live in `external/EDSDK/` (git-ignored).
 - Windows 64-bit library: `external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Library/EDSDK.lib`
 - Windows 64-bit DLL: `external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Dll/EDSDK.dll`
+- **Official API documentation (PDF)**: `external/EDSDK/EDSDKv132010W/Document/EDSDK_API_EN.pdf`
+- **Header files** (property IDs, enums, structs): `external/EDSDK/EDSDKv132010W/Windows/EDSDK/Header/`
 - `build.rs` links the SDK library and copies the DLLs to the build output directory automatically.
+- Always verify property IDs, error codes, and struct layouts against the header files or PDF before implementing.
 
 ## File structure
 ```
 src/
   main.rs             — server startup, backend registry, route registration
   camera/
-    mod.rs            — CameraBackend trait, DeviceId, DeviceInfo, CameraError
+    mod.rs            — CameraBackend trait, DeviceId, DeviceInfo, CameraError,
+                        CameraParameter, ParameterOption
   backends/
     mod.rs            — feature-gated module declarations
     canon.rs          — FFI bindings + impl CameraBackend for CanonBackend
+                        (actor pattern, SDK thread, code→label decode tables)
   routes/
     mod.rs
-    cameras.rs        — route handlers (list, connect, disconnect, ...)
+    cameras.rs        — AppState, BackendState, LiveViewSenders, route handlers
+static/
+  index.html          — web UI source (embedded in binary at compile time)
 build.rs              — SDK linking + DLL copy based on active features and target OS
 ```
 
