@@ -1,5 +1,5 @@
 @import AVFoundation;
-@import CoreImage;
+@import ImageIO;
 @import Foundation;
 
 #include "avfoundation_bridge.h"
@@ -7,49 +7,51 @@
 #include <string.h>
 
 // ---------------------------------------------------------------------------
-// WcFrameDelegate — receives sample buffers and stores the latest JPEG
+// WcFrameDelegate — stores the latest raw pixel buffer from the capture queue.
+//
+// JPEG encoding is done via CGBitmapContext + CGImageDestination (CPU/SIMD,
+// no GPU pipeline) for predictable, stall-free latency.
 // ---------------------------------------------------------------------------
 
 @interface WcFrameDelegate : NSObject <AVCaptureVideoDataOutputSampleBufferDelegate>
-- (nullable NSData *)copyLatestFrame;
+- (nullable NSData *)encodeLatestFrameAsJPEG;
 @end
 
 @implementation WcFrameDelegate {
-    NSLock       *_lock;
-    CIContext    *_ctx;
-    NSData       *_latestJpeg;
-    // Signals once when the very first frame arrives so wc_capture_frame can
-    // block briefly rather than returning nil immediately after session start.
+    NSLock              *_lock;
+    CVPixelBufferRef     _latestBuffer;
     dispatch_semaphore_t _firstFrameSem;
-    BOOL _hasFrame;
+    BOOL                 _hasFrame;
 }
 
 - (instancetype)init {
     if ((self = [super init])) {
         _lock          = [[NSLock alloc] init];
-        _ctx           = [CIContext contextWithOptions:nil];
+        _latestBuffer  = NULL;
         _firstFrameSem = dispatch_semaphore_create(0);
         _hasFrame      = NO;
     }
     return self;
 }
 
+- (void)dealloc {
+    [_lock lock];
+    if (_latestBuffer) { CVPixelBufferRelease(_latestBuffer); _latestBuffer = NULL; }
+    [_lock unlock];
+}
+
+// Runs on the serial captureQueue — must be as fast as possible.
 - (void)captureOutput:(AVCaptureOutput *)output
 didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
        fromConnection:(AVCaptureConnection *)connection {
     CVPixelBufferRef pb = CMSampleBufferGetImageBuffer(sampleBuffer);
     if (!pb) return;
 
-    CIImage *image = [CIImage imageWithCVPixelBuffer:pb];
-    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-    NSData *jpeg = [_ctx JPEGRepresentationOfImage:image
-                                        colorSpace:cs
-                                           options:@{}];
-    CGColorSpaceRelease(cs);
-    if (!jpeg) return;
+    CVPixelBufferRetain(pb);
 
     [_lock lock];
-    _latestJpeg = jpeg;
+    if (_latestBuffer) CVPixelBufferRelease(_latestBuffer);
+    _latestBuffer = pb;
     if (!_hasFrame) {
         _hasFrame = YES;
         dispatch_semaphore_signal(_firstFrameSem);
@@ -57,16 +59,59 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
     [_lock unlock];
 }
 
-- (nullable NSData *)copyLatestFrame {
-    // Wait up to 2 s for the first frame after session start.
+// Called from the actor thread.
+// Uses CGBitmapContext + ImageIO (CPU/NEON) — no GPU, no pipeline stalls.
+- (nullable NSData *)encodeLatestFrameAsJPEG {
     if (!_hasFrame) {
         dispatch_semaphore_wait(_firstFrameSem,
             dispatch_time(DISPATCH_TIME_NOW, 2LL * NSEC_PER_SEC));
     }
+
     [_lock lock];
-    NSData *copy = [_latestJpeg copy];
+    CVPixelBufferRef pb = _latestBuffer ? CVPixelBufferRetain(_latestBuffer) : NULL;
     [_lock unlock];
-    return copy;
+
+    if (!pb) return nil;
+
+    CVPixelBufferLockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+
+    size_t width       = CVPixelBufferGetWidth(pb);
+    size_t height      = CVPixelBufferGetHeight(pb);
+    size_t bytesPerRow = CVPixelBufferGetBytesPerRow(pb);
+    void  *baseAddr    = CVPixelBufferGetBaseAddress(pb);
+
+    // Wrap the BGRA pixel data in a CGImage without copying.
+    // kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst matches
+    // kCVPixelFormatType_32BGRA on little-endian (all Apple hardware).
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGContextRef bmpCtx = CGBitmapContextCreate(
+        baseAddr, width, height, 8, bytesPerRow, cs,
+        kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+    CGImageRef cgImage = CGBitmapContextCreateImage(bmpCtx);
+
+    CGContextRelease(bmpCtx);
+    CGColorSpaceRelease(cs);
+    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+    CVPixelBufferRelease(pb);
+
+    if (!cgImage) return nil;
+
+    NSMutableData *jpegData = [NSMutableData data];
+    CGImageDestinationRef dest = CGImageDestinationCreateWithData(
+        (__bridge CFMutableDataRef)jpegData,
+        CFSTR("public.jpeg"),
+        1, NULL);
+
+    if (!dest) { CGImageRelease(cgImage); return nil; }
+
+    CGImageDestinationAddImage(dest, cgImage, (__bridge CFDictionaryRef)@{
+        (__bridge id)kCGImageDestinationLossyCompressionQuality: @(0.75)
+    });
+    CGImageDestinationFinalize(dest);
+    CFRelease(dest);
+    CGImageRelease(cgImage);
+
+    return jpegData.length > 0 ? jpegData : nil;
 }
 
 @end
@@ -76,9 +121,9 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 // ---------------------------------------------------------------------------
 
 @interface WcSessionHandle : NSObject
-@property (nonatomic, strong) AVCaptureSession        *session;
-@property (nonatomic, strong) WcFrameDelegate         *delegate;
-@property (nonatomic, strong) dispatch_queue_t         captureQueue;
+@property (nonatomic, strong) AVCaptureSession  *session;
+@property (nonatomic, strong) WcFrameDelegate   *delegate;
+@property (nonatomic, strong) dispatch_queue_t   captureQueue;
 @end
 
 @implementation WcSessionHandle
@@ -120,7 +165,7 @@ int wc_list_devices(WcDeviceInfo *out, int capacity) {
 }
 
 void *wc_open_session(const char *unique_id) {
-    NSString *uid    = [NSString stringWithUTF8String:unique_id];
+    NSString *uid = [NSString stringWithUTF8String:unique_id];
     AVCaptureDevice *device = [AVCaptureDevice deviceWithUniqueID:uid];
     if (!device) return NULL;
 
@@ -130,7 +175,7 @@ void *wc_open_session(const char *unique_id) {
     if (!input) return NULL;
 
     dispatch_queue_t q =
-        dispatch_queue_create("bird.webcam.capture", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_create("bird.avfoundation.capture", DISPATCH_QUEUE_SERIAL);
 
     WcFrameDelegate *delegate = [[WcFrameDelegate alloc] init];
 
@@ -149,21 +194,18 @@ void *wc_open_session(const char *unique_id) {
 
     [session addInput:input];
     [session addOutput:output];
-
     [session startRunning];
 
-    WcSessionHandle *handle  = [[WcSessionHandle alloc] init];
+    WcSessionHandle *handle = [[WcSessionHandle alloc] init];
     handle.session      = session;
     handle.delegate     = delegate;
     handle.captureQueue = q;
 
-    // Transfer ownership to the caller — balanced by __bridge_transfer in wc_close_session.
     return (__bridge_retained void *)handle;
 }
 
 void wc_close_session(void *handle) {
     if (!handle) return;
-    // Consume the retained reference created in wc_open_session.
     WcSessionHandle *h = (__bridge_transfer WcSessionHandle *)handle;
     [h.session stopRunning];
 }
@@ -172,15 +214,15 @@ int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
     if (!handle || !out_data || !out_size) return -1;
 
     WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
-    NSData *frame = [h.delegate copyLatestFrame];
-    if (!frame || frame.length == 0) return -1;
+    NSData *jpeg = [h.delegate encodeLatestFrameAsJPEG];
+    if (!jpeg || jpeg.length == 0) return -1;
 
-    uint8_t *buf = (uint8_t *)malloc(frame.length);
+    uint8_t *buf = (uint8_t *)malloc(jpeg.length);
     if (!buf) return -1;
 
-    memcpy(buf, frame.bytes, frame.length);
+    memcpy(buf, jpeg.bytes, jpeg.length);
     *out_data = buf;
-    *out_size = frame.length;
+    *out_size = jpeg.length;
     return 0;
 }
 
