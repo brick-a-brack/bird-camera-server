@@ -24,10 +24,15 @@ fn link_canon_sdk(manifest_dir: &str) {
     #[cfg(target_os = "macos")]
     {
         println!(
-            "cargo:rustc-link-search=native={}/external/EDSDK/EDSDKv132010M",
+            "cargo:rustc-link-search=framework={}/external/EDSDK/EDSDKv132010M",
             manifest_dir
         );
-        println!("cargo:rustc-link-lib=EDSDK");
+        println!("cargo:rustc-link-lib=framework=EDSDK");
+        // Embed the framework search path as an rpath so dyld finds it at runtime.
+        println!(
+            "cargo:rustc-link-arg=-Wl,-rpath,{}/external/EDSDK/EDSDKv132010M",
+            manifest_dir
+        );
     }
 
     #[cfg(target_os = "linux")]
