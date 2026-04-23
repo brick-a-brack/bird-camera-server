@@ -69,15 +69,24 @@ pub struct ParameterOption {
 }
 
 /// A single settable camera parameter with its current value and allowed options.
+///
+/// Discrete params (e.g. focus mode) set `options` and leave `min`/`max`/`step` as `None`.
+/// Range params (e.g. brightness, zoom) set `min`/`max`/`step` and leave `options` empty.
 #[derive(Debug, Clone, Serialize)]
 pub struct CameraParameter {
-    /// Parameter identifier (e.g. "aperture", "iso", "shutter_speed").
+    /// Parameter identifier (e.g. "brightness", "zoom_absolute").
     #[serde(rename = "type")]
     pub kind: String,
-    /// Human-readable label of the currently selected value.
+    /// Current value: label for discrete params, stringified integer for range params.
     pub current: String,
-    /// All values the camera currently accepts for this parameter.
+    /// Allowed values for discrete params; empty for range params.
     pub options: Vec<ParameterOption>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub step: Option<i32>,
 }
 
 #[derive(Debug, Error)]

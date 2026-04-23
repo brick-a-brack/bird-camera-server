@@ -4,7 +4,7 @@
 
 #define WC_MAX_STR      256
 #define WC_MAX_DEVICES   32
-#define WC_MAX_PARAMS     4
+#define WC_MAX_PARAMS    20
 #define WC_MAX_OPTIONS    4
 #define WC_MAX_KIND      32
 #define WC_MAX_LABEL     32
@@ -20,9 +20,13 @@ typedef struct {
 } WcParamOption;
 
 typedef struct {
-    char          kind[WC_MAX_KIND];
-    int           current;
-    int           num_options;
+    char kind[WC_MAX_KIND];
+    int  current;
+    int  is_range;          // 1 = continuous range, 0 = discrete options
+    int  min;               // valid when is_range = 1
+    int  max;               // valid when is_range = 1
+    int  step;              // valid when is_range = 1
+    int  num_options;       // valid when is_range = 0
     WcParamOption options[WC_MAX_OPTIONS];
 } WcParamDesc;
 
@@ -46,7 +50,8 @@ int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size);
 void wc_free_frame(uint8_t *data);
 
 // Enumerate settable parameters for the connected device.
-// Only parameters with at least 2 options are returned.
+// Discrete params (is_range=0) have at least 2 options.
+// Range params (is_range=1) expose min/max/step.
 // Returns the number of WcParamDesc written into out[].
 int wc_get_parameters(void *handle, WcParamDesc *out, int capacity);
 

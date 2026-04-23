@@ -11,7 +11,7 @@ use crate::camera::{CameraBackend, CameraError, CameraParameter, DeviceId, Devic
 
 const WC_MAX_STR: usize = 256;
 const WC_MAX_DEVICES: usize = 32;
-const WC_MAX_PARAMS: usize = 4;
+const WC_MAX_PARAMS: usize = 20;
 const WC_MAX_OPTIONS: usize = 4;
 const WC_MAX_KIND: usize = 32;
 const WC_MAX_LABEL: usize = 32;
@@ -36,6 +36,10 @@ struct WcParamOption {
 struct WcParamDesc {
     kind:        [c_char; WC_MAX_KIND],
     current:     c_int,
+    is_range:    c_int,
+    min:         c_int,
+    max:         c_int,
+    step:        c_int,
     num_options: c_int,
     options:     [WcParamOption; WC_MAX_OPTIONS],
 }
@@ -342,24 +346,35 @@ fn get_parameters_impl(
                 .to_string_lossy()
                 .into_owned();
 
-            let num_options = d.num_options as usize;
-            let options: Vec<ParameterOption> = d.options[..num_options]
-                .iter()
-                .map(|o| {
-                    let label = unsafe { CStr::from_ptr(o.label.as_ptr()) }
-                        .to_string_lossy()
-                        .into_owned();
-                    ParameterOption { label, value: o.value }
-                })
-                .collect();
+            if d.is_range != 0 {
+                CameraParameter {
+                    kind,
+                    current: d.current.to_string(),
+                    options: vec![],
+                    min: Some(d.min),
+                    max: Some(d.max),
+                    step: Some(if d.step > 0 { d.step } else { 1 }),
+                }
+            } else {
+                let num_options = d.num_options as usize;
+                let options: Vec<ParameterOption> = d.options[..num_options]
+                    .iter()
+                    .map(|o| {
+                        let label = unsafe { CStr::from_ptr(o.label.as_ptr()) }
+                            .to_string_lossy()
+                            .into_owned();
+                        ParameterOption { label, value: o.value }
+                    })
+                    .collect();
 
-            let current = options
-                .iter()
-                .find(|o| o.value == d.current)
-                .map(|o| o.label.clone())
-                .unwrap_or_else(|| d.current.to_string());
+                let current = options
+                    .iter()
+                    .find(|o| o.value == d.current)
+                    .map(|o| o.label.clone())
+                    .unwrap_or_else(|| d.current.to_string());
 
-            CameraParameter { kind, current, options }
+                CameraParameter { kind, current, options, min: None, max: None, step: None }
+            }
         })
         .collect();
 

@@ -155,6 +155,24 @@
     }
     .param-select:focus { outline: none; border-color: #666; }
 
+    .param-range {
+      width: 100%;
+      accent-color: #60a5fa;
+      cursor: pointer;
+    }
+    .param-range-row {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+    }
+    .param-range-val {
+      font-size: .8rem;
+      color: #aaa;
+      white-space: nowrap;
+      min-width: 3rem;
+      text-align: right;
+    }
+
     .params-loading {
       color: #555;
       font-style: italic;
@@ -356,9 +374,37 @@
         return;
       }
 
-      grid.innerHTML = params.map(p => `
+      grid.innerHTML = params.map(p => renderParamItem(p, id)).join('');
+
+      grid.querySelectorAll('.param-select').forEach(el => {
+        el.addEventListener('change', () => setParamSelect(el));
+      });
+      grid.querySelectorAll('.param-range').forEach(el => {
+        const valEl = el.parentElement.querySelector('.param-range-val');
+        el.addEventListener('input', () => { if (valEl) valEl.textContent = el.value; });
+        el.addEventListener('change', () => setParamRange(el));
+      });
+    }
+
+    function renderParamItem(p, id) {
+      const name = escHtml(formatParamName(p.type));
+      if (p.min !== undefined && p.max !== undefined) {
+        const cur  = parseInt(p.current, 10);
+        const step = p.step || 1;
+        return `
+          <div class="param-item">
+            <div class="param-label">${name}</div>
+            <div class="param-range-row">
+              <input type="range" class="param-range"
+                     min="${p.min}" max="${p.max}" step="${step}" value="${cur}"
+                     data-device-id="${escHtml(id)}" data-kind="${escHtml(p.type)}">
+              <span class="param-range-val">${cur}</span>
+            </div>
+          </div>`;
+      }
+      return `
         <div class="param-item">
-          <div class="param-label">${escHtml(formatParamName(p.type))}</div>
+          <div class="param-label">${name}</div>
           <div class="param-current">${escHtml(p.current)}</div>
           <select class="param-select" data-device-id="${escHtml(id)}" data-kind="${escHtml(p.type)}">
             ${p.options.map(o => `
@@ -366,14 +412,10 @@
                 ${escHtml(o.label)}
               </option>`).join('')}
           </select>
-        </div>`).join('');
-
-      grid.querySelectorAll('.param-select').forEach(select => {
-        select.addEventListener('change', () => setParameter(select));
-      });
+        </div>`;
     }
 
-    async function setParameter(select) {
+    async function setParamSelect(select) {
       const deviceId = select.dataset.deviceId;
       const kind     = select.dataset.kind;
       const value    = parseInt(select.value, 10);
@@ -384,8 +426,22 @@
       } catch (e) {
         alert(`Failed to set ${formatParamName(kind)}: ${e.message}`);
       } finally {
-        // Silently refresh params in-place — no loading flash.
         await refreshParams(deviceId);
+      }
+    }
+
+    async function setParamRange(input) {
+      const deviceId = input.dataset.deviceId;
+      const kind     = input.dataset.kind;
+      const value    = parseInt(input.value, 10);
+
+      input.disabled = true;
+      try {
+        await api('PUT', `/cameras/${deviceId}/settings`, { type: kind, value });
+      } catch (e) {
+        alert(`Failed to set ${formatParamName(kind)}: ${e.message}`);
+      } finally {
+        input.disabled = false;
       }
     }
 

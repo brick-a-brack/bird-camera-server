@@ -630,6 +630,9 @@ fn get_parameters_impl(
             kind: name.to_string(),
             current,
             options,
+            min: None,
+            max: None,
+            step: None,
         });
     }
 
