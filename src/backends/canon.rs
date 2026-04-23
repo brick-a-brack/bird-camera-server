@@ -141,9 +141,9 @@ enum Command {
 /// Canon EOS backend.
 ///
 /// All EDSDK calls are dispatched to a dedicated OS thread that pumps
-/// `EdsGetEvent()` on every tick. This is required because the EDSDK relies
-/// on Windows messages internally and does not work correctly on threads
-/// without a message pump (e.g. tokio worker threads).
+/// `EdsGetEvent()` on every tick. This is required because the EDSDK is not
+/// thread-safe and must run on a single OS thread with an event pump
+/// (Windows message loop on Windows, run loop on macOS).
 pub struct CanonBackend {
     tx: mpsc::Sender<Command>,
 }
