@@ -4,10 +4,11 @@
 @import CoreMediaIO;
 
 #include "bridge.h"
+#include <IOKit/IOKitLib.h>
+#include <IOKit/usb/IOUSBLib.h>
+#include <IOKit/usb/USB.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 
 // ---------------------------------------------------------------------------
@@ -95,6 +96,199 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 @end
 
 // ---------------------------------------------------------------------------
+// UVC direct-write layer (IOKit)
+// ---------------------------------------------------------------------------
+
+#define UVC_SET_CUR            0x01
+#define UVC_CS_INTERFACE       0x24
+#define UVC_VC_INPUT_TERMINAL  0x02
+#define UVC_VC_PROCESSING_UNIT 0x05
+#define UVC_ITT_CAMERA         0x0201
+
+typedef struct { const char *kind; uint8_t selector; BOOL isPU; uint8_t size; } UVCEntry;
+
+// Processing Unit (PU) and Camera Terminal (CT) controls with UVC selectors and data sizes.
+static const UVCEntry kUVCControls[] = {
+    { "backlight_compensation",    0x01, YES, 2 },
+    { "brightness",                0x02, YES, 2 },
+    { "contrast",                  0x03, YES, 2 },
+    { "gain",                      0x04, YES, 2 },
+    { "hue",                       0x06, YES, 2 },
+    { "saturation",                0x07, YES, 2 },
+    { "sharpness",                 0x08, YES, 2 },
+    { "white_balance_temperature", 0x0A, YES, 2 },
+    { "white_balance_auto",        0x0B, YES, 1 },
+    { "exposure_auto",             0x02, NO,  1 }, // CT AE mode: 1=manual, 8=aperture priority
+    { "exposure_time_absolute",    0x04, NO,  4 }, // CT, 100µs units
+    { "focus_auto",                0x08, NO,  1 }, // CT: 0=manual, 1=auto
+    { "focus_absolute",            0x06, NO,  2 }, // CT, mm units
+    { "zoom_absolute",             0x0B, NO,  2 },
+};
+static const int kUVCControlCount = (int)(sizeof(kUVCControls) / sizeof(kUVCControls[0]));
+
+// Walk the USB configuration descriptor to find the VideoControl interface number,
+// Processing Unit ID, and Camera Terminal ID.
+static int uvc_parse_config(IOUSBDeviceInterface **dev,
+                             uint8_t *outVCIf, uint8_t *outPU, uint8_t *outCT) {
+    IOUSBConfigurationDescriptorPtr cfg = NULL;
+    if ((*dev)->GetConfigurationDescriptorPtr(dev, 0, &cfg) != kIOReturnSuccess || !cfg) return -1;
+
+    uint8_t  *buf   = (uint8_t *)cfg;
+    uint16_t  total = cfg->wTotalLength;
+    *outVCIf = 0xFF; *outPU = 0; *outCT = 0;
+
+    BOOL     inVC  = NO;
+    uint16_t off   = 0;
+    while (off + 2 <= total) {
+        uint8_t bLen  = buf[off];
+        uint8_t bType = buf[off + 1];
+        if (bLen < 2 || (uint16_t)(off + bLen) > total) break;
+
+        if (bType == kUSBInterfaceDesc && bLen >= 9) {
+            inVC = (buf[off + 5] == 0x0E && buf[off + 6] == 0x01);
+            if (inVC) *outVCIf = buf[off + 2];
+        } else if (bType == UVC_CS_INTERFACE && inVC && bLen >= 4) {
+            uint8_t sub = buf[off + 2];
+            if (sub == UVC_VC_PROCESSING_UNIT && !*outPU)
+                *outPU = buf[off + 3];
+            else if (sub == UVC_VC_INPUT_TERMINAL && bLen >= 8 && !*outCT) {
+                uint16_t termType = (uint16_t)(buf[off + 4] | (buf[off + 5] << 8));
+                if (termType == UVC_ITT_CAMERA)
+                    *outCT = buf[off + 3];
+            }
+        }
+        off += bLen;
+    }
+    NSLog(@"[uvc] parse_config: vcIf=%u PU=%u CT=%u", *outVCIf, *outPU, *outCT);
+    return (*outPU || *outCT) ? 0 : -1;
+}
+
+// Open the VideoControl interface for the camera identified by AVFoundation uniqueID.
+// Uses IOUSBInterfaceInterface::ControlRequest (VVUVCKit approach) instead of
+// IOUSBDeviceInterface::DeviceRequest. The kernel allows class requests through the
+// interface object even when it has the device open, whereas DeviceRequest is blocked
+// for some CT controls (e.g. CT_EXPOSURE_TIME_ABSOLUTE) when AVFoundation runs AE.
+static IOUSBInterfaceInterface190 **uvc_open_vc_interface(NSString *uniqueID,
+                                                           uint8_t *outVCIf,
+                                                           uint8_t *outPU,
+                                                           uint8_t *outCT) {
+    *outVCIf = 0xFF; *outPU = 0; *outCT = 0;
+    NSLog(@"[uvc] open uniqueID=%@", uniqueID);
+
+    if (![uniqueID hasPrefix:@"0x"] || uniqueID.length < 10) {
+        NSLog(@"[uvc] not a USB uniqueID, skipping");
+        return NULL;
+    }
+    NSScanner *sc = [NSScanner scannerWithString:uniqueID];
+    [sc scanString:@"0x" intoString:nil];
+    unsigned long long combined = 0;
+    if (![sc scanHexLongLong:&combined]) return NULL;
+    uint32_t locationID = (uint32_t)(combined >> 32);
+    NSLog(@"[uvc] locationID=0x%08X", locationID);
+
+    // 1. Find IOUSBDevice by locationID.
+    io_iterator_t devIter = 0;
+    kern_return_t kr = IOServiceGetMatchingServices(kIOMasterPortDefault,
+                           IOServiceMatching(kIOUSBDeviceClassName), &devIter);
+    if (kr != kIOReturnSuccess) return NULL;
+    io_service_t devSvc = 0, svc;
+    while ((svc = IOIteratorNext(devIter))) {
+        CFNumberRef locRef = IORegistryEntryCreateCFProperty(svc, CFSTR("locationID"),
+                                                              kCFAllocatorDefault, 0);
+        if (locRef) {
+            uint32_t loc = 0; CFNumberGetValue(locRef, kCFNumberSInt32Type, &loc); CFRelease(locRef);
+            if (loc == locationID) { devSvc = svc; break; }
+        }
+        IOObjectRelease(svc);
+    }
+    IOObjectRelease(devIter);
+    if (!devSvc) { NSLog(@"[uvc] device not found"); return NULL; }
+
+    // 2. Get IOUSBDeviceInterface (needed for config descriptor + interface iterator).
+    IOCFPlugInInterface **devPlugin = NULL; SInt32 score = 0;
+    kr = IOCreatePlugInInterfaceForService(devSvc, kIOUSBDeviceUserClientTypeID,
+                                            kIOCFPlugInInterfaceID, &devPlugin, &score);
+    IOObjectRelease(devSvc);
+    if (kr != kIOReturnSuccess || !devPlugin) return NULL;
+    IOUSBDeviceInterface **dev = NULL;
+    HRESULT hr = (*devPlugin)->QueryInterface(devPlugin,
+                     CFUUIDGetUUIDBytes(kIOUSBDeviceInterfaceID), (LPVOID *)&dev);
+    (*devPlugin)->Release(devPlugin);
+    if (hr || !dev) return NULL;
+
+    // 3. Parse config descriptor for PU/CT unit IDs and VC interface number.
+    uvc_parse_config(dev, outVCIf, outPU, outCT);
+
+    // 4. Find the VideoControl interface service.
+    IOUSBFindInterfaceRequest ifReq = {
+        .bInterfaceClass    = 0x0E,
+        .bInterfaceSubClass = 0x01,
+        .bInterfaceProtocol = kIOUSBFindInterfaceDontCare,
+        .bAlternateSetting  = kIOUSBFindInterfaceDontCare,
+    };
+    io_iterator_t ifIter = 0;
+    kr = (*dev)->CreateInterfaceIterator(dev, &ifReq, &ifIter);
+    (*dev)->Release(dev);
+    if (kr != kIOReturnSuccess) return NULL;
+    io_service_t vcSvc = IOIteratorNext(ifIter);
+    IOObjectRelease(ifIter);
+    if (!vcSvc) return NULL;
+
+    // 5. Get IOUSBInterfaceInterface190 for the VC interface.
+    IOCFPlugInInterface **ifPlugin = NULL;
+    kr = IOCreatePlugInInterfaceForService(vcSvc, kIOUSBInterfaceUserClientTypeID,
+                                            kIOCFPlugInInterfaceID, &ifPlugin, &score);
+    IOObjectRelease(vcSvc);
+    if (kr != kIOReturnSuccess || !ifPlugin) return NULL;
+    IOUSBInterfaceInterface190 **intf = NULL;
+    hr = (*ifPlugin)->QueryInterface(ifPlugin,
+             CFUUIDGetUUIDBytes(kIOUSBInterfaceInterfaceID190), (LPVOID *)&intf);
+    (*ifPlugin)->Release(ifPlugin);
+    if (hr || !intf) return NULL;
+
+    // 6. Open the interface. kIOReturnExclusiveAccess is expected (AVFoundation holds it)
+    //    and is acceptable: ControlRequest for class requests still works.
+    IOReturn openKr = (*intf)->USBInterfaceOpen(intf);
+    NSLog(@"[uvc] USBInterfaceOpen kr=0x%X", openKr);
+    if (openKr != kIOReturnSuccess && openKr != kIOReturnExclusiveAccess) {
+        (*intf)->Release(intf);
+        return NULL;
+    }
+    return intf;
+}
+
+// Send a UVC SET_CUR request via the VideoControl interface object.
+static int uvc_set_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
+                        uint8_t ifNum, void *data, uint16_t len) {
+    IOUSBDevRequest req;
+    memset(&req, 0, sizeof(req));
+    req.bmRequestType = USBmakebmRequestType(kUSBOut, kUSBClass, kUSBInterface);
+    req.bRequest      = UVC_SET_CUR;
+    req.wValue        = (uint16_t)(selector << 8);
+    req.wIndex        = (uint16_t)((unitID << 8) | ifNum);
+    req.wLength       = len;
+    req.pData         = data;
+    IOReturn kr = (*intf)->ControlRequest(intf, 0, &req);
+    NSLog(@"[uvc] SET_CUR unit=%u sel=0x%02X if=%u len=%u -> kr=0x%X", unitID, selector, ifNum, len, kr);
+    return (kr == kIOReturnSuccess) ? 0 : -1;
+}
+
+// Read a UVC GET_CUR value via the VideoControl interface object.
+static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
+                        uint8_t ifNum, void *data, uint16_t len) {
+    IOUSBDevRequest req;
+    memset(&req, 0, sizeof(req));
+    req.bmRequestType = USBmakebmRequestType(kUSBIn, kUSBClass, kUSBInterface);
+    req.bRequest      = 0x81; // GET_CUR
+    req.wValue        = (uint16_t)(selector << 8);
+    req.wIndex        = (uint16_t)((unitID << 8) | ifNum);
+    req.wLength       = len;
+    req.pData         = data;
+    IOReturn kr = (*intf)->ControlRequest(intf, 0, &req);
+    return (kr == kIOReturnSuccess) ? 0 : -1;
+}
+
+// ---------------------------------------------------------------------------
 // WcSessionHandle
 // ---------------------------------------------------------------------------
 
@@ -105,20 +299,96 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 @property (nonatomic, strong) dispatch_queue_t  captureQueue;
 - (void)setCmioDeviceID:(uint32_t)devID;
 - (uint32_t)cmioDeviceID;
+- (void)setUvcInterface:(IOUSBInterfaceInterface190 **)intf
+            vcInterface:(uint8_t)vcIf
+                     pu:(uint8_t)pu
+                     ct:(uint8_t)ct;
+- (BOOL)uvcAvailable;
+- (BOOL)uvcHasCT;
+- (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len;
+- (int)uvcWriteKind:(const char *)kind value:(int32_t)value;
 @end
 
 @implementation WcSessionHandle {
-    uint32_t _cmioDeviceID; // CMIOObjectID; 0 = not found
+    uint32_t                    _cmioDeviceID;
+    IOUSBInterfaceInterface190 **_uvcIF;
+    uint8_t                     _uvcVCIf;
+    uint8_t                     _uvcPU;
+    uint8_t                     _uvcCT;
 }
+
+- (void)dealloc {
+    if (_uvcIF) {
+        (*_uvcIF)->USBInterfaceClose(_uvcIF);
+        (*_uvcIF)->Release(_uvcIF);
+        _uvcIF = NULL;
+    }
+}
+
 - (void)setCmioDeviceID:(uint32_t)devID { _cmioDeviceID = devID; }
 - (uint32_t)cmioDeviceID { return _cmioDeviceID; }
+
+- (void)setUvcInterface:(IOUSBInterfaceInterface190 **)intf
+            vcInterface:(uint8_t)vcIf
+                     pu:(uint8_t)pu
+                     ct:(uint8_t)ct {
+    _uvcIF   = intf;
+    _uvcVCIf = vcIf;
+    _uvcPU   = pu;
+    _uvcCT   = ct;
+}
+
+- (BOOL)uvcAvailable { return _uvcIF != NULL; }
+- (BOOL)uvcHasCT     { return _uvcIF != NULL && _uvcCT != 0; }
+
+- (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len {
+    if (!_uvcIF || !_uvcCT) return -1;
+    return uvc_get_cur(_uvcIF, _uvcCT, selector, _uvcVCIf, buf, len);
+}
+
+- (int)uvcWriteKind:(const char *)kind value:(int32_t)value {
+    const UVCEntry *entry = NULL;
+    for (int i = 0; i < kUVCControlCount; i++) {
+        if (strcmp(kUVCControls[i].kind, kind) == 0) { entry = &kUVCControls[i]; break; }
+    }
+    if (!entry) return -1;
+
+    uint8_t unitID = entry->isPU ? _uvcPU : _uvcCT;
+    if (!unitID) return -1;
+
+    // Map logical auto values to UVC AE mode bitmask.
+    // CMIO/UI uses 0=manual, 1=auto; UVC CT uses 1=manual, 8=aperture priority.
+    int32_t uvcVal = value;
+    if (strcmp(kind, "exposure_auto") == 0)
+        uvcVal = (value == 0) ? 1 : 8;
+
+    // exposure_time_absolute requires the camera to be in manual AE mode.
+    // Re-assert manual AE mode and verify via GET_CUR before writing the time value.
+    if (strcmp(kind, "exposure_time_absolute") == 0 && _uvcCT) {
+        uint8_t aeManual = 1;
+        uvc_set_cur(_uvcIF, _uvcCT, 0x02, _uvcVCIf, &aeManual, 1);
+        uint8_t readBack = 0xFF;
+        uvc_get_cur(_uvcIF, _uvcCT, 0x02, _uvcVCIf, &readBack, 1);
+        NSLog(@"[uvc] AE mode after manual assert: camera reports 0x%02X (want 0x01)", readBack);
+    }
+
+    uint8_t buf[4] = {0};
+    switch (entry->size) {
+        case 1: buf[0] = (uint8_t)uvcVal; break;
+        case 2: { uint16_t v = (uint16_t)(int16_t)uvcVal; memcpy(buf, &v, 2); break; }
+        case 4: { uint32_t v = (uint32_t)uvcVal;           memcpy(buf, &v, 4); break; }
+        default: return -1;
+    }
+    NSLog(@"[uvc] write kind=%s value=%d bytes=[%02X %02X %02X %02X]",
+          kind, (int)uvcVal, buf[0], buf[1], buf[2], buf[3]);
+    return uvc_set_cur(_uvcIF, unitID, entry->selector, _uvcVCIf, buf, entry->size);
+}
 @end
 
 // ---------------------------------------------------------------------------
-// CMIOHardware helpers
+// CMIOHardware helpers (read-only — used for parameter enumeration)
 // ---------------------------------------------------------------------------
 
-// Mapping from CMIO control class ID to our parameter kind string.
 typedef struct { uint32_t classID; const char *kind; } CmioKindEntry;
 
 static const CmioKindEntry kCmioKinds[] = {
@@ -133,8 +403,6 @@ static const CmioKindEntry kCmioKinds[] = {
     { kCMIOExposureControlClassID,              "exposure_time_absolute"     },
     { kCMIOFocusControlClassID,                 "focus_absolute"             },
     { kCMIOZoomControlClassID,                  "zoom_absolute"              },
-    { kCMIOPanControlClassID,                   "pan_absolute"               },
-    { kCMIOTiltControlClassID,                  "tilt_absolute"              },
 };
 static const int kCmioKindCount = (int)(sizeof(kCmioKinds) / sizeof(kCmioKinds[0]));
 
@@ -144,12 +412,11 @@ static const char *cmio_kind_for_class(uint32_t classID) {
     return NULL;
 }
 
-// Controls that have an AVFoundation mode counterpart needing a lock before writing.
 typedef struct { const char *range_kind; const char *auto_kind; } AutoKindEntry;
 static const AutoKindEntry kAutoKinds[] = {
-    { "focus_absolute",           "focus_auto"          },
-    { "exposure_time_absolute",   "exposure_auto"       },
-    { "white_balance_temperature","white_balance_auto"  },
+    { "exposure_time_absolute",    "exposure_auto"      },
+    { "white_balance_temperature", "white_balance_auto" },
+    { "focus_absolute",            "focus_auto"         },
 };
 static const int kAutoKindCount = (int)(sizeof(kAutoKinds) / sizeof(kAutoKinds[0]));
 
@@ -157,13 +424,6 @@ static const char *cmio_auto_kind_for_range_kind(const char *rangeKind) {
     for (int i = 0; i < kAutoKindCount; i++)
         if (strcmp(kAutoKinds[i].range_kind, rangeKind) == 0)
             return kAutoKinds[i].auto_kind;
-    return NULL;
-}
-
-static const char *cmio_range_kind_for_auto_kind(const char *autoKind) {
-    for (int i = 0; i < kAutoKindCount; i++)
-        if (strcmp(kAutoKinds[i].auto_kind, autoKind) == 0)
-            return kAutoKinds[i].range_kind;
     return NULL;
 }
 
@@ -179,7 +439,6 @@ static uint32_t cmio_get_class(CMIOObjectID obj) {
     return (uint32_t)cls;
 }
 
-// Find the CMIO device whose UID matches the AVCaptureDevice.uniqueID.
 static CMIOObjectID cmio_find_device(NSString *uniqueID) {
     CMIOObjectPropertyAddress devAddr = {
         kCMIOHardwarePropertyDevices,
@@ -214,7 +473,6 @@ static CMIOObjectID cmio_find_device(NSString *uniqueID) {
     return result;
 }
 
-// Return all CMIOObjectIDs owned by `parent`. Caller must free().
 static CMIOObjectID *cmio_owned(CMIOObjectID parent, UInt32 *outCount) {
     CMIOObjectPropertyAddress addr = {
         kCMIOObjectPropertyOwnedObjects,
@@ -235,8 +493,6 @@ static CMIOObjectID *cmio_owned(CMIOObjectID parent, UInt32 *outCount) {
     return objs;
 }
 
-// Collect all feature-control objects reachable from `deviceID`
-// (device-level objects + stream-level objects).
 static NSArray<NSNumber *> *cmio_collect_controls(CMIOObjectID deviceID) {
     NSMutableArray *result = [NSMutableArray array];
 
@@ -264,7 +520,37 @@ static NSArray<NSNumber *> *cmio_collect_controls(CMIOObjectID deviceID) {
     return result;
 }
 
-// Populate a range WcParamDesc from a CMIO feature control object.
+// Try to set kCMIOFeatureControlPropertyAutomaticManual for a given control class.
+// Returns YES if the property was settable and the write succeeded.
+static BOOL cmio_set_auto_manual(CMIOObjectID deviceID, uint32_t controlClassID, UInt32 value) {
+    NSArray<NSNumber *> *controls = cmio_collect_controls(deviceID);
+    for (NSNumber *objNum in controls) {
+        CMIOObjectID ctrl = (CMIOObjectID)objNum.unsignedIntValue;
+        if (cmio_get_class(ctrl) != controlClassID) continue;
+        CMIOObjectPropertyAddress addr = {
+            kCMIOFeatureControlPropertyAutomaticManual,
+            kCMIOObjectPropertyScopeGlobal,
+            kCMIOObjectPropertyElementMain
+        };
+        Boolean settable = NO;
+        CMIOObjectIsPropertySettable(ctrl, &addr, &settable);
+        NSLog(@"[cmio] AutomaticManual settable=%d for class=0x%X", (int)settable, controlClassID);
+        if (!settable) return NO;
+        UInt32 sz = sizeof(value);
+        OSStatus err = CMIOObjectSetPropertyData(ctrl, &addr, 0, NULL, sz, &value);
+        NSLog(@"[cmio] set AutomaticManual=%u -> err=%d", value, (int)err);
+        return (err == noErr);
+    }
+    return NO;
+}
+
+// Scale factor to convert CMIO NativeValue to the unit used in the UI / UVC.
+// exposure_time_absolute: CMIO reports seconds (Float32), UVC expects 100µs units.
+static Float32 cmio_scale_for_kind(const char *kind) {
+    if (strcmp(kind, "exposure_time_absolute") == 0) return 10000.0f;
+    return 1.0f;
+}
+
 static BOOL push_cmio_range(WcParamDesc *out, int *count, int capacity,
                               CMIOObjectID ctrl, const char *kind) {
     if (*count >= capacity) return NO;
@@ -289,13 +575,14 @@ static BOOL push_cmio_range(WcParamDesc *out, int *count, int capacity,
     sz = sizeof(cur);
     CMIOObjectGetPropertyData(ctrl, &valAddr, 0, NULL, sz, &sz, &cur);
 
+    Float32 scale = cmio_scale_for_kind(kind);
     WcParamDesc *p = &out[(*count)++];
     memset(p, 0, sizeof(*p));
     strlcpy(p->kind, kind, WC_MAX_KIND);
-    p->current  = (int)roundf(cur);
+    p->current = (int)roundf(cur * scale);
     p->is_range = 1;
-    p->min      = (int)range.mMinimum;
-    p->max      = (int)range.mMaximum;
+    p->min      = (int)roundf((Float32)range.mMinimum * scale);
+    p->max      = (int)roundf((Float32)range.mMaximum * scale);
     p->step     = 1;
     return YES;
 }
@@ -311,7 +598,6 @@ static void push_option(WcParamDesc *p, int value, const char *label) {
     p->num_options++;
 }
 
-// Expose the CMIO AutomaticManual property (0=manual, 1=auto) as a discrete param.
 static BOOL push_cmio_auto_manual(WcParamDesc *out, int *count, int capacity,
                                    CMIOObjectID ctrl, const char *autoKind) {
     if (*count >= capacity) return NO;
@@ -406,17 +692,11 @@ void *wc_open_session(const char *unique_id) {
     CMIOObjectID cmioID = cmio_find_device(device.uniqueID);
     if (cmioID != kCMIOObjectUnknown) [handle setCmioDeviceID:(uint32_t)cmioID];
 
-    // Lock AVFoundation modes once so they never interfere with CMIO writes.
-    // All focus/exposure/white_balance control goes exclusively through CMIO.
-    NSError *lockErr = nil;
-    if ([device lockForConfiguration:&lockErr]) {
-        if ([device isFocusModeSupported:AVCaptureFocusModeLocked])
-            device.focusMode = AVCaptureFocusModeLocked;
-        if ([device isExposureModeSupported:AVCaptureExposureModeLocked])
-            device.exposureMode = AVCaptureExposureModeLocked;
-        if ([device isWhiteBalanceModeSupported:AVCaptureWhiteBalanceModeLocked])
-            device.whiteBalanceMode = AVCaptureWhiteBalanceModeLocked;
-        [device unlockForConfiguration];
+    // Open UVC VideoControl interface for direct parameter writes via ControlRequest.
+    uint8_t vcIf = 0, pu = 0, ct = 0;
+    IOUSBInterfaceInterface190 **uvcIF = uvc_open_vc_interface(device.uniqueID, &vcIf, &pu, &ct);
+    if (uvcIF) {
+        [handle setUvcInterface:uvcIF vcInterface:vcIf pu:pu ct:ct];
     }
 
     return (__bridge_retained void *)handle;
@@ -426,6 +706,7 @@ void wc_close_session(void *handle) {
     if (!handle) return;
     WcSessionHandle *h = (__bridge_transfer WcSessionHandle *)handle;
     [h.session stopRunning];
+    // WcSessionHandle dealloc closes the UVC device.
 }
 
 int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
@@ -445,7 +726,7 @@ int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
 void wc_free_frame(uint8_t *data) { free(data); }
 
 // ---------------------------------------------------------------------------
-// C interface — parameter enumeration
+// C interface — parameter enumeration (reads via CMIO)
 // ---------------------------------------------------------------------------
 
 int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
@@ -455,11 +736,6 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
     if (!dev) return 0;
 
     int count = 0;
-
-    // --- CMIOHardware feature controls ---
-    // For focus/exposure/white_balance: expose auto/manual toggle then the range value.
-    // This replaces AVFoundation's discrete mode params so there's a single control path.
-
     CMIOObjectID cmioID = (CMIOObjectID)[h cmioDeviceID];
     if (cmioID != kCMIOObjectUnknown) {
         NSArray<NSNumber *> *controls = cmio_collect_controls(cmioID);
@@ -467,11 +743,66 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
             CMIOObjectID ctrl = (CMIOObjectID)objNum.unsignedIntValue;
             const char *kind = cmio_kind_for_class(cmio_get_class(ctrl));
             if (!kind) continue;
-            // Auto/manual toggle (only for controls that have an AVFoundation counterpart).
             const char *autoKind = cmio_auto_kind_for_range_kind(kind);
             if (autoKind) push_cmio_auto_manual(out, &count, capacity, ctrl, autoKind);
-            // Range value.
             push_cmio_range(out, &count, capacity, ctrl, kind);
+        }
+    }
+
+    // Some drivers (e.g. Logitech on macOS) expose the absolute controls via CMIO but not
+    // the AutomaticManual toggle, or the toggle reflects AVFoundation's state rather than
+    // the true UVC hardware state. Fall back to UVC GET_CUR for auto toggles on CT controls.
+    if ([h uvcHasCT]) {
+        // focus_auto
+        if (count < capacity) {
+            BOOL hasFocusAbsolute = NO, hasFocusAuto = NO;
+            for (int i = 0; i < count; i++) {
+                if (strcmp(out[i].kind, "focus_absolute") == 0) hasFocusAbsolute = YES;
+                if (strcmp(out[i].kind, "focus_auto")     == 0) hasFocusAuto     = YES;
+            }
+            if (hasFocusAbsolute && !hasFocusAuto) {
+                uint8_t v = 0;
+                if ([h uvcReadCTSelector:0x08 intoBytes:&v len:1] == 0) {
+                    WcParamDesc *p = &out[count++];
+                    memset(p, 0, sizeof(*p));
+                    strlcpy(p->kind, "focus_auto", WC_MAX_KIND);
+                    p->current = (int)v;
+                    push_option(p, 0, "Manual");
+                    push_option(p, 1, "Auto");
+                }
+            }
+        }
+        // exposure_auto: always read via UVC GET_CUR so the state reflects actual hardware,
+        // not AVFoundation's view (which AVFoundation may have overridden).
+        if (count < capacity) {
+            BOOL hasExposureAbsolute = NO, hasExposureAuto = NO;
+            for (int i = 0; i < count; i++) {
+                if (strcmp(out[i].kind, "exposure_time_absolute") == 0) hasExposureAbsolute = YES;
+                if (strcmp(out[i].kind, "exposure_auto")          == 0) hasExposureAuto     = YES;
+            }
+            if (hasExposureAbsolute) {
+                uint8_t aeMode = 0;
+                if ([h uvcReadCTSelector:0x02 intoBytes:&aeMode len:1] == 0) {
+                    // UVC AE mode: 1=manual→0, anything else→1 (auto)
+                    int logicalAuto = (aeMode == 1) ? 0 : 1;
+                    if (hasExposureAuto) {
+                        // Update existing CMIO-emitted entry with the real hardware value.
+                        for (int i = 0; i < count; i++) {
+                            if (strcmp(out[i].kind, "exposure_auto") == 0) {
+                                out[i].current = logicalAuto;
+                                break;
+                            }
+                        }
+                    } else {
+                        WcParamDesc *p = &out[count++];
+                        memset(p, 0, sizeof(*p));
+                        strlcpy(p->kind, "exposure_auto", WC_MAX_KIND);
+                        p->current = logicalAuto;
+                        push_option(p, 0, "Manual");
+                        push_option(p, 1, "Auto");
+                    }
+                }
+            }
         }
     }
 
@@ -479,71 +810,52 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
 }
 
 // ---------------------------------------------------------------------------
-// C interface — parameter setting
+// C interface — parameter setting (writes via UVC/IOKit)
 // ---------------------------------------------------------------------------
 
-// Lock the relevant AVFoundation mode before writing a CMIO hardware value.
-// AVFoundation will otherwise keep the hardware in auto mode and reject CMIO writes.
 int wc_set_parameter(void *handle, const char *kind, int value) {
     if (!handle || !kind) return -1;
     WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
-    if (![h cmioDeviceID]) return -1;
+    if (![h uvcAvailable]) return -1;
 
+    // For exposure controls the kernel UVC driver manages AE state internally.
+    // Cooperate via CMIO so the kernel driver switches mode before we send UVC commands.
     CMIOObjectID cmioID = (CMIOObjectID)[h cmioDeviceID];
-    if (cmioID == kCMIOObjectUnknown) return -1;
-
-    const char *rangeKind = cmio_range_kind_for_auto_kind(kind);
-    const char *lookupKind = rangeKind ? rangeKind : kind;
-
-    NSArray<NSNumber *> *controls = cmio_collect_controls(cmioID);
-    CMIOObjectID ctrlObj = kCMIOObjectUnknown;
-    for (NSNumber *objNum in controls) {
-        CMIOObjectID obj = (CMIOObjectID)objNum.unsignedIntValue;
-        const char *k = cmio_kind_for_class(cmio_get_class(obj));
-        if (k && strcmp(k, lookupKind) == 0) { ctrlObj = obj; break; }
-    }
-    if (ctrlObj == kCMIOObjectUnknown) return -1;
-
-    CMIOObjectPropertyAddress autoAddr = {
-        kCMIOFeatureControlPropertyAutomaticManual,
-        kCMIOObjectPropertyScopeGlobal,
-        kCMIOObjectPropertyElementMain
-    };
-
-    // Auto/manual toggle — just set AutomaticManual directly.
-    if (rangeKind) {
-        UInt32 v = (UInt32)value;
-        return CMIOObjectSetPropertyData(ctrlObj, &autoAddr, 0, NULL, sizeof(v), &v) == noErr
-               ? 0 : -1;
+    if (cmioID != kCMIOObjectUnknown) {
+        if (strcmp(kind, "exposure_auto") == 0) {
+            cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, value ? 1 : 0);
+        } else if (strcmp(kind, "exposure_time_absolute") == 0) {
+            cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, 0);
+        }
     }
 
-    // Absolute range value — disable auto, ensure on, then write value.
-    UInt32 manual = 0;
-    CMIOObjectSetPropertyData(ctrlObj, &autoAddr, 0, NULL, sizeof(manual), &manual);
+    int ret = [h uvcWriteKind:kind value:(int32_t)value];
 
-    CMIOObjectPropertyAddress onOffAddr = {
-        kCMIOFeatureControlPropertyOnOff,
-        kCMIOObjectPropertyScopeGlobal,
-        kCMIOObjectPropertyElementMain
-    };
-    UInt32 on = 1;
-    CMIOObjectSetPropertyData(ctrlObj, &onOffAddr, 0, NULL, sizeof(on), &on);
+    // AVFoundation re-applies its auto modes continuously — sync mode so it stops
+    // fighting our UVC writes for focus and white balance.
+    if (ret == 0) {
+        AVCaptureDevice *dev = h.device;
+        if (strcmp(kind, "focus_auto") == 0 && [dev lockForConfiguration:nil]) {
+            BOOL isAuto = (value != 0);
+            AVCaptureFocusMode mode = isAuto ? AVCaptureFocusModeContinuousAutoFocus
+                                             : AVCaptureFocusModeLocked;
+            if ([dev isFocusModeSupported:mode]) dev.focusMode = mode;
+            [dev unlockForConfiguration];
+        } else if (strcmp(kind, "white_balance_auto") == 0 && [dev lockForConfiguration:nil]) {
+            BOOL isAuto = (value != 0);
+            AVCaptureWhiteBalanceMode mode = isAuto ? AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance
+                                                    : AVCaptureWhiteBalanceModeLocked;
+            if ([dev isWhiteBalanceModeSupported:mode]) dev.whiteBalanceMode = mode;
+            [dev unlockForConfiguration];
+        } else if (strcmp(kind, "exposure_auto") == 0 && [dev lockForConfiguration:nil]) {
+            // Lock AVFoundation's AE loop so it stops overriding exposure_time_absolute.
+            BOOL isAuto = (value != 0);
+            AVCaptureExposureMode mode = isAuto ? AVCaptureExposureModeContinuousAutoExposure
+                                                : AVCaptureExposureModeLocked;
+            if ([dev isExposureModeSupported:mode]) dev.exposureMode = mode;
+            [dev unlockForConfiguration];
+        }
+    }
 
-    Float32 val = (Float32)value;
-
-    CMIOObjectPropertyAddress nativeAddr = {
-        kCMIOFeatureControlPropertyNativeValue,
-        kCMIOObjectPropertyScopeGlobal,
-        kCMIOObjectPropertyElementMain
-    };
-    if (CMIOObjectSetPropertyData(ctrlObj, &nativeAddr, 0, NULL, sizeof(val), &val) == noErr)
-        return 0;
-
-    CMIOObjectPropertyAddress absAddr = {
-        kCMIOFeatureControlPropertyAbsoluteValue,
-        kCMIOObjectPropertyScopeGlobal,
-        kCMIOObjectPropertyElementMain
-    };
-    return CMIOObjectSetPropertyData(ctrlObj, &absAddr, 0, NULL, sizeof(val), &val) == noErr
-           ? 0 : -1;
+    return ret;
 }

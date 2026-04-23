@@ -105,6 +105,46 @@ GET  /cameras/{id}/liveview          — MJPEG stream (requires connected, retur
 - Features: camera list with connected badge, connect/disconnect buttons, collapsible parameters panel, live view toggle.
 - Auto-refreshes camera list every 5 seconds.
 
+### AVFoundation backend (macOS webcams)
+
+- Source: `src/backends/avfoundation/bridge.m` (Objective-C) + `src/backends/avfoundation/mod.rs` (Rust actor).
+- Build: `build.rs` compiles `bridge.m` with `cc` and links `AVFoundation`, `CoreMedia`, `CoreVideo`, `CoreImage`, `Foundation`, `IOKit` frameworks.
+
+#### Parameter reading
+- Parameters are enumerated via **CoreMediaIO (CMIO)**: `wc_get_parameters` walks CMIO feature-control objects owned by the device.
+- Ranges are read with `kCMIOFeatureControlPropertyNativeRange` / `kCMIOFeatureControlPropertyNativeValue` — these are read-only on most UVC cameras' CMIO drivers (that is fine, we only read).
+- `exposure_time_absolute` values from CMIO are in seconds (Float32); they are scaled ×10000 to match UVC 100µs units before being returned to the Rust layer.
+- Auto/manual toggles (exposure, white balance) are read via `kCMIOFeatureControlPropertyAutomaticManual`.
+
+#### Parameter writing — IOKit direct UVC
+- **Do NOT write via CMIO** (`kCMIOFeatureControlPropertyNativeValue`). On typical UVC webcams macOS marks this property as non-settable (`CMIOObjectIsPropertySettable` → false). Any write returns `kCMIOHardwareIllegalOperationError` (0x6E6F7065 = `'nope'`).
+- **Do NOT call `[AVCaptureDevice lockForConfiguration]` + set `exposureMode`/`whiteBalanceMode`** inside `wc_set_parameter`. This permanently locks the AVFoundation mode and breaks subsequent CMIO reads.
+- Writes go through **IOKit direct UVC `SET_CUR` requests** (`IOUSBDevRequest`, `bmRequestType=0x21`, `bRequest=0x01`).
+- At `wc_open_session`: parse the uniqueID to extract the USB locationID, find the `IOUSBDevice` in the IOKit registry, parse the config descriptor to locate the VideoControl interface number + Processing Unit ID + Camera Terminal ID, then call `USBDeviceOpen`.
+- At `wc_close_session` / dealloc: call `USBDeviceClose` + `Release`.
+
+#### AVFoundation uniqueID format (USB cameras)
+- Format: `"0x"` + up to 16 hex chars (leading zeros omitted) encoding `locationID(32) | vendorID(16) | productID(16)`.
+- Example: `"0x130000046d082d"` → locationID=`0x00130000`, vendorID=`0x046d` (Logitech), productID=`0x082d`.
+- Parse with `NSScanner scanHexLongLong`, then `locationID = (uint32_t)(combined >> 32)`.
+- Minimum valid length is 10 chars (`"0x"` + 8 hex). Built-in cameras have a different format and will skip UVC silently.
+
+#### UVC control table
+| kind | unit | selector | size |
+|---|---|---|---|
+| backlight_compensation | PU | 0x01 | 2 |
+| brightness | PU | 0x02 | 2 |
+| contrast | PU | 0x03 | 2 |
+| gain | PU | 0x04 | 2 |
+| hue | PU | 0x06 | 2 |
+| saturation | PU | 0x07 | 2 |
+| sharpness | PU | 0x08 | 2 |
+| white_balance_temperature | PU | 0x0A | 2 |
+| white_balance_auto | PU | 0x0B | 1 |
+| exposure_auto | CT | 0x02 | 1 (0→1=manual, 1→8=aperture priority) |
+| exposure_time_absolute | CT | 0x04 | 4 (100µs units) |
+| zoom_absolute | CT | 0x0B | 2 |
+
 ## Canon SDK
 - SDK files live in `external/EDSDK/` (git-ignored).
 - Windows 64-bit library: `external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Library/EDSDK.lib`

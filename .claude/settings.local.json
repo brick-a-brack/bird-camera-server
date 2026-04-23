@@ -14,7 +14,9 @@
       "Bash(~/.cargo/bin/cargo build *)",
       "Bash(~/.cargo/bin/cargo run *)",
       "Bash(~/.cargo/bin/cargo clean *)",
-      "Bash(grep -v \"^--$\")"
+      "Bash(grep -v \"^--$\")",
+      "WebFetch(domain:nadavrub.wordpress.com)",
+      "Bash(curl *)"
     ]
   }
 }
