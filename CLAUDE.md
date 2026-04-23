@@ -113,7 +113,7 @@ GET  /cameras/{id}/liveview          — MJPEG stream (requires connected, retur
 #### Parameter reading
 - Parameters are enumerated via **CoreMediaIO (CMIO)**: `wc_get_parameters` walks CMIO feature-control objects owned by the device.
 - Ranges are read with `kCMIOFeatureControlPropertyNativeRange` / `kCMIOFeatureControlPropertyNativeValue` — these are read-only on most UVC cameras' CMIO drivers (that is fine, we only read).
-- `exposure_time_absolute` values from CMIO are in seconds (Float32); they are scaled ×10000 to match UVC 100µs units before being returned to the Rust layer.
+- `exposure_time_absolute` values from CMIO `NativeValue` are already in 100µs units (same as UVC) for UVC cameras. No scaling is applied.
 - Auto/manual toggles (exposure, white balance) are read via `kCMIOFeatureControlPropertyAutomaticManual`.
 
 #### Parameter writing — IOKit direct UVC

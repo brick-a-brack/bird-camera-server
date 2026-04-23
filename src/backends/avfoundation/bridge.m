@@ -544,10 +544,7 @@ static BOOL cmio_set_auto_manual(CMIOObjectID deviceID, uint32_t controlClassID,
     return NO;
 }
 
-// Scale factor to convert CMIO NativeValue to the unit used in the UI / UVC.
-// exposure_time_absolute: CMIO reports seconds (Float32), UVC expects 100µs units.
-static Float32 cmio_scale_for_kind(const char *kind) {
-    if (strcmp(kind, "exposure_time_absolute") == 0) return 10000.0f;
+static Float32 cmio_scale_for_kind(__unused const char *kind) {
     return 1.0f;
 }
 
