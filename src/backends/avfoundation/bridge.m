@@ -96,7 +96,7 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 @end
 
 // ---------------------------------------------------------------------------
-// UVC direct-write layer (IOKit)
+// UVC direct I/O layer (IOKit ControlRequest)
 // ---------------------------------------------------------------------------
 
 #define UVC_SET_CUR            0x01
@@ -104,36 +104,6 @@ didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer
 #define UVC_VC_INPUT_TERMINAL  0x02
 #define UVC_VC_PROCESSING_UNIT 0x05
 #define UVC_ITT_CAMERA         0x0201
-
-typedef struct { const char *kind; uint8_t selector; BOOL isPU; uint8_t size; } UVCEntry;
-
-// Processing Unit (PU) and Camera Terminal (CT) controls with UVC selectors and data sizes.
-static const UVCEntry kUVCControls[] = {
-    // Processing Unit
-    { "backlight_compensation",    0x01, YES, 2 },
-    { "brightness",                0x02, YES, 2 },
-    { "contrast",                  0x03, YES, 2 },
-    { "gain",                      0x04, YES, 2 },
-    { "power_line_frequency",      0x05, YES, 1 }, // enum: 0=disabled,1=50Hz,2=60Hz
-    { "hue",                       0x06, YES, 2 },
-    { "saturation",                0x07, YES, 2 },
-    { "sharpness",                 0x08, YES, 2 },
-    { "gamma",                     0x09, YES, 2 },
-    { "white_balance_temperature", 0x0A, YES, 2 },
-    { "white_balance_auto",        0x0B, YES, 1 },
-    { "color_enable",              0x0C, YES, 1 },
-    { "hue_auto",                  0x0F, YES, 1 }, // UVC 1.5
-    // Camera Terminal
-    { "exposure_auto",             0x02, NO,  1 }, // CT AE mode: 1=manual, 8=aperture priority
-    { "exposure_time_absolute",    0x04, NO,  4 }, // CT, 100µs units
-    { "focus_absolute",            0x06, NO,  2 },
-    { "focus_auto",                0x08, NO,  1 },
-    { "iris_absolute",             0x09, NO,  2 },
-    { "zoom_absolute",             0x0B, NO,  2 },
-    { "pan_absolute",              0x0D, NO,  4 }, // signed 32-bit, arcseconds
-    { "tilt_absolute",             0x0E, NO,  4 }, // signed 32-bit, arcseconds
-};
-static const int kUVCControlCount = (int)(sizeof(kUVCControls) / sizeof(kUVCControls[0]));
 
 // Walk the USB configuration descriptor to find the VideoControl interface number,
 // Processing Unit ID, and Camera Terminal ID.
@@ -173,10 +143,9 @@ static int uvc_parse_config(IOUSBDeviceInterface **dev,
 }
 
 // Open the VideoControl interface for the camera identified by AVFoundation uniqueID.
-// Uses IOUSBInterfaceInterface::ControlRequest (VVUVCKit approach) instead of
-// IOUSBDeviceInterface::DeviceRequest. The kernel allows class requests through the
-// interface object even when it has the device open, whereas DeviceRequest is blocked
-// for some CT controls (e.g. CT_EXPOSURE_TIME_ABSOLUTE) when AVFoundation runs AE.
+// Uses IOUSBInterfaceInterface::ControlRequest instead of IOUSBDeviceInterface::DeviceRequest.
+// The kernel allows class requests through the interface object even when AVFoundation holds
+// the device open (USBInterfaceOpen returns kIOReturnExclusiveAccess = 0xE00002C5 — acceptable).
 static IOUSBInterfaceInterface190 **uvc_open_vc_interface(NSString *uniqueID,
                                                            uint8_t *outVCIf,
                                                            uint8_t *outPU,
@@ -184,6 +153,7 @@ static IOUSBInterfaceInterface190 **uvc_open_vc_interface(NSString *uniqueID,
     *outVCIf = 0xFF; *outPU = 0; *outCT = 0;
     NSLog(@"[uvc] open uniqueID=%@", uniqueID);
 
+    // Built-in cameras and non-USB devices have a different uniqueID format — skip them.
     if (![uniqueID hasPrefix:@"0x"] || uniqueID.length < 10) {
         NSLog(@"[uvc] not a USB uniqueID, skipping");
         return NULL;
@@ -255,8 +225,7 @@ static IOUSBInterfaceInterface190 **uvc_open_vc_interface(NSString *uniqueID,
     (*ifPlugin)->Release(ifPlugin);
     if (hr || !intf) return NULL;
 
-    // 6. Open the interface. kIOReturnExclusiveAccess is expected (AVFoundation holds it)
-    //    and is acceptable: ControlRequest for class requests still works.
+    // 6. Open the interface. kIOReturnExclusiveAccess is acceptable — ControlRequest still works.
     IOReturn openKr = (*intf)->USBInterfaceOpen(intf);
     NSLog(@"[uvc] USBInterfaceOpen kr=0x%X", openKr);
     if (openKr != kIOReturnSuccess && openKr != kIOReturnExclusiveAccess) {
@@ -266,7 +235,6 @@ static IOUSBInterfaceInterface190 **uvc_open_vc_interface(NSString *uniqueID,
     return intf;
 }
 
-// Send a UVC SET_CUR request via the VideoControl interface object.
 static int uvc_set_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
                         uint8_t ifNum, void *data, uint16_t len) {
     IOUSBDevRequest req;
@@ -282,7 +250,7 @@ static int uvc_set_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
     return (kr == kIOReturnSuccess) ? 0 : -1;
 }
 
-// Generic UVC GET request (GET_CUR=0x81, GET_MIN=0x82, GET_MAX=0x83, GET_RES=0x84).
+// request: GET_CUR=0x81, GET_MIN=0x82, GET_MAX=0x83, GET_RES=0x84
 static int uvc_get_req(IOUSBInterfaceInterface190 **intf, uint8_t request, uint8_t unitID,
                         uint8_t selector, uint8_t ifNum, void *data, uint16_t len) {
     IOUSBDevRequest req;
@@ -297,13 +265,8 @@ static int uvc_get_req(IOUSBInterfaceInterface190 **intf, uint8_t request, uint8
     return (kr == kIOReturnSuccess) ? 0 : -1;
 }
 
-static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
-                        uint8_t ifNum, void *data, uint16_t len) {
-    return uvc_get_req(intf, 0x81, unitID, selector, ifNum, data, len);
-}
-
-// Read a 1/2/4-byte UVC value and return it as a signed int32_t (little-endian).
-// 1-byte values are treated as unsigned; 2-byte as signed int16; 4-byte as signed int32.
+// Read a 1/2/4-byte UVC value into a signed int32_t (little-endian on the wire).
+// 1-byte values are unsigned; 2-byte signed int16; 4-byte signed int32.
 static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint8_t unitID,
                          uint8_t selector, uint8_t ifNum, uint8_t size, int32_t *out) {
     uint8_t buf[4] = {0};
@@ -316,6 +279,57 @@ static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint
     }
     return 0;
 }
+
+// ---------------------------------------------------------------------------
+// Unified control descriptor table
+// ---------------------------------------------------------------------------
+
+typedef enum { CTRL_RANGE, CTRL_BOOL_MANUAL_AUTO, CTRL_BOOL_OFF_ON, CTRL_ENUM_PLF } CtrlPresentation;
+typedef enum { AVF_NONE, AVF_FOCUS, AVF_WHITE_BALANCE, AVF_EXPOSURE } CtrlAvfSync;
+
+typedef struct {
+    const char      *kind;
+    uint8_t          uvc_selector;
+    BOOL             uvc_is_pu;    // YES = Processing Unit, NO = Camera Terminal
+    uint8_t          uvc_size;     // bytes on the wire: 1, 2, or 4
+    uint32_t         cmio_class;   // CMIO class for range reads; 0 = UVC-only
+    uint32_t         cmio_auto_class; // CMIO class to cooperate with on write; 0 = none
+    CtrlPresentation presentation;
+    CtrlAvfSync      avf_sync;
+} ControlDesc;
+
+// exposure_auto uses a non-standard UVC value mapping:
+//   read : UVC 1 (manual) → logical 0, UVC 8 (aperture priority) → logical 1
+//   write: logical 0 → UVC 1, logical 1 → UVC 8
+// This is handled by name in uvcWriteKind:value: and in wc_get_parameters.
+
+static const ControlDesc kControls[] = {
+    // Processing Unit controls
+    //  kind                        sel    PU?   sz  cmio_class                               cmio_auto_class                   presentation           avf_sync
+    { "backlight_compensation",    0x01, YES,  2, kCMIOBacklightCompensationControlClassID, 0,                                CTRL_RANGE,            AVF_NONE          },
+    { "brightness",                0x02, YES,  2, kCMIOBrightnessControlClassID,            0,                                CTRL_RANGE,            AVF_NONE          },
+    { "contrast",                  0x03, YES,  2, kCMIOContrastControlClassID,              0,                                CTRL_RANGE,            AVF_NONE          },
+    { "gain",                      0x04, YES,  2, kCMIOGainControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE          },
+    { "power_line_frequency",      0x05, YES,  1, 0,                                        0,                                CTRL_ENUM_PLF,         AVF_NONE          },
+    { "hue",                       0x06, YES,  2, kCMIOHueControlClassID,                   0,                                CTRL_RANGE,            AVF_NONE          },
+    { "saturation",                0x07, YES,  2, kCMIOSaturationControlClassID,            0,                                CTRL_RANGE,            AVF_NONE          },
+    { "sharpness",                 0x08, YES,  2, kCMIOSharpnessControlClassID,             0,                                CTRL_RANGE,            AVF_NONE          },
+    { "gamma",                     0x09, YES,  2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
+    { "white_balance_temperature", 0x0A, YES,  2, kCMIOTemperatureControlClassID,           0,                                CTRL_RANGE,            AVF_NONE          },
+    { "white_balance_auto",        0x0B, YES,  1, 0,                                        kCMIOTemperatureControlClassID,   CTRL_BOOL_MANUAL_AUTO, AVF_WHITE_BALANCE },
+    { "color_enable",              0x0C, YES,  1, 0,                                        0,                                CTRL_BOOL_OFF_ON,      AVF_NONE          },
+    { "hue_auto",                  0x0F, YES,  1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_NONE          },
+    // Camera Terminal controls
+    { "exposure_auto",             0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE      },
+    { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              kCMIOExposureControlClassID,      CTRL_RANGE,            AVF_NONE          },
+    { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE          },
+    { "focus_auto",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS         },
+    { "iris_absolute",             0x09, NO,   2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
+    { "zoom_absolute",             0x0B, NO,   2, kCMIOZoomControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE          },
+    { "pan_absolute",              0x0D, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
+    { "tilt_absolute",             0x0E, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
+};
+static const int kControlCount = (int)(sizeof(kControls) / sizeof(kControls[0]));
 
 // ---------------------------------------------------------------------------
 // WcSessionHandle
@@ -335,9 +349,9 @@ static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint
 - (BOOL)uvcAvailable;
 - (BOOL)uvcHasCT;
 - (BOOL)uvcHasPU;
-- (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len;
-- (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len;
+// Read any UVC control value via GET_CUR / GET_MIN / GET_MAX / GET_RES.
 - (int)uvcGetSelector:(uint8_t)selector request:(uint8_t)req isPU:(BOOL)isPU out:(int32_t *)out size:(uint8_t)size;
+// Write a UVC control by kind name (handles exposure_auto AE-mode mapping internally).
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value;
 @end
 
@@ -374,16 +388,6 @@ static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint
 - (BOOL)uvcHasCT     { return _uvcIF != NULL && _uvcCT != 0; }
 - (BOOL)uvcHasPU     { return _uvcIF != NULL && _uvcPU != 0; }
 
-- (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len {
-    if (!_uvcIF || !_uvcCT) return -1;
-    return uvc_get_cur(_uvcIF, _uvcCT, selector, _uvcVCIf, buf, len);
-}
-
-- (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len {
-    if (!_uvcIF || !_uvcPU) return -1;
-    return uvc_get_req(_uvcIF, req, _uvcPU, selector, _uvcVCIf, buf, len);
-}
-
 - (int)uvcGetSelector:(uint8_t)selector request:(uint8_t)req isPU:(BOOL)isPU out:(int32_t *)out size:(uint8_t)size {
     if (!_uvcIF) return -1;
     uint8_t unitID = isPU ? _uvcPU : _uvcCT;
@@ -392,33 +396,33 @@ static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint
 }
 
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value {
-    const UVCEntry *entry = NULL;
-    for (int i = 0; i < kUVCControlCount; i++) {
-        if (strcmp(kUVCControls[i].kind, kind) == 0) { entry = &kUVCControls[i]; break; }
+    // Find the descriptor.
+    const ControlDesc *d = NULL;
+    for (int i = 0; i < kControlCount; i++) {
+        if (strcmp(kControls[i].kind, kind) == 0) { d = &kControls[i]; break; }
     }
-    if (!entry) return -1;
+    if (!d) return -1;
 
-    uint8_t unitID = entry->isPU ? _uvcPU : _uvcCT;
+    uint8_t unitID = d->uvc_is_pu ? _uvcPU : _uvcCT;
     if (!unitID) return -1;
 
-    // Map logical auto values to UVC AE mode bitmask.
-    // CMIO/UI uses 0=manual, 1=auto; UVC CT uses 1=manual, 8=aperture priority.
     int32_t uvcVal = value;
+
+    // exposure_auto: logical 0 (manual) → UVC AE mode 1, logical 1 (auto) → UVC AE mode 8 (aperture priority).
     if (strcmp(kind, "exposure_auto") == 0)
         uvcVal = (value == 0) ? 1 : 8;
 
-    // exposure_time_absolute requires the camera to be in manual AE mode.
-    // Re-assert manual AE mode and verify via GET_CUR before writing the time value.
+    // exposure_time_absolute: assert manual AE mode on the CT before writing the time value.
     if (strcmp(kind, "exposure_time_absolute") == 0 && _uvcCT) {
         uint8_t aeManual = 1;
         uvc_set_cur(_uvcIF, _uvcCT, 0x02, _uvcVCIf, &aeManual, 1);
         uint8_t readBack = 0xFF;
-        uvc_get_cur(_uvcIF, _uvcCT, 0x02, _uvcVCIf, &readBack, 1);
+        uvc_get_req(_uvcIF, 0x81, _uvcCT, 0x02, _uvcVCIf, &readBack, 1);
         NSLog(@"[uvc] AE mode after manual assert: camera reports 0x%02X (want 0x01)", readBack);
     }
 
     uint8_t buf[4] = {0};
-    switch (entry->size) {
+    switch (d->uvc_size) {
         case 1: buf[0] = (uint8_t)uvcVal; break;
         case 2: { uint16_t v = (uint16_t)(int16_t)uvcVal; memcpy(buf, &v, 2); break; }
         case 4: { uint32_t v = (uint32_t)uvcVal;           memcpy(buf, &v, 4); break; }
@@ -426,51 +430,13 @@ static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint
     }
     NSLog(@"[uvc] write kind=%s value=%d bytes=[%02X %02X %02X %02X]",
           kind, (int)uvcVal, buf[0], buf[1], buf[2], buf[3]);
-    return uvc_set_cur(_uvcIF, unitID, entry->selector, _uvcVCIf, buf, entry->size);
+    return uvc_set_cur(_uvcIF, unitID, d->uvc_selector, _uvcVCIf, buf, d->uvc_size);
 }
 @end
 
 // ---------------------------------------------------------------------------
-// CMIOHardware helpers (read-only — used for parameter enumeration)
+// CMIO helpers (read-only — used for range enumeration)
 // ---------------------------------------------------------------------------
-
-typedef struct { uint32_t classID; const char *kind; } CmioKindEntry;
-
-static const CmioKindEntry kCmioKinds[] = {
-    { kCMIOBrightnessControlClassID,            "brightness"                },
-    { kCMIOContrastControlClassID,              "contrast"                  },
-    { kCMIOGainControlClassID,                  "gain"                      },
-    { kCMIOSaturationControlClassID,            "saturation"                },
-    { kCMIOSharpnessControlClassID,             "sharpness"                 },
-    { kCMIOHueControlClassID,                   "hue"                       },
-    { kCMIOTemperatureControlClassID,           "white_balance_temperature"  },
-    { kCMIOBacklightCompensationControlClassID, "backlight_compensation"     },
-    { kCMIOExposureControlClassID,              "exposure_time_absolute"     },
-    { kCMIOFocusControlClassID,                 "focus_absolute"             },
-    { kCMIOZoomControlClassID,                  "zoom_absolute"              },
-};
-static const int kCmioKindCount = (int)(sizeof(kCmioKinds) / sizeof(kCmioKinds[0]));
-
-static const char *cmio_kind_for_class(uint32_t classID) {
-    for (int i = 0; i < kCmioKindCount; i++)
-        if (kCmioKinds[i].classID == classID) return kCmioKinds[i].kind;
-    return NULL;
-}
-
-typedef struct { const char *range_kind; const char *auto_kind; } AutoKindEntry;
-static const AutoKindEntry kAutoKinds[] = {
-    { "exposure_time_absolute",    "exposure_auto"      },
-    { "white_balance_temperature", "white_balance_auto" },
-    { "focus_absolute",            "focus_auto"         },
-};
-static const int kAutoKindCount = (int)(sizeof(kAutoKinds) / sizeof(kAutoKinds[0]));
-
-static const char *cmio_auto_kind_for_range_kind(const char *rangeKind) {
-    for (int i = 0; i < kAutoKindCount; i++)
-        if (strcmp(kAutoKinds[i].range_kind, rangeKind) == 0)
-            return kAutoKinds[i].auto_kind;
-    return NULL;
-}
 
 static uint32_t cmio_get_class(CMIOObjectID obj) {
     CMIOObjectPropertyAddress addr = {
@@ -538,65 +504,36 @@ static CMIOObjectID *cmio_owned(CMIOObjectID parent, UInt32 *outCount) {
     return objs;
 }
 
-static NSArray<NSNumber *> *cmio_collect_controls(CMIOObjectID deviceID) {
-    NSMutableArray *result = [NSMutableArray array];
+// Build a dictionary mapping CMIO class ID → CMIOObjectID for all feature controls on the device.
+static NSDictionary<NSNumber *, NSNumber *> *cmio_build_class_map(CMIOObjectID deviceID) {
+    NSMutableDictionary *map = [NSMutableDictionary dictionary];
 
     UInt32 n = 0;
     CMIOObjectID *devObjs = cmio_owned(deviceID, &n);
-    if (!devObjs) return result;
+    if (!devObjs) return map;
 
     for (UInt32 i = 0; i < n; i++) {
         uint32_t cls = cmio_get_class(devObjs[i]);
-        if (cmio_kind_for_class(cls)) {
-            [result addObject:@(devObjs[i])];
-        } else if (cls == kCMIOStreamClassID) {
+        if (cls == kCMIOStreamClassID) {
             UInt32 sn = 0;
             CMIOObjectID *streamObjs = cmio_owned(devObjs[i], &sn);
             if (streamObjs) {
                 for (UInt32 j = 0; j < sn; j++) {
-                    if (cmio_kind_for_class(cmio_get_class(streamObjs[j])))
-                        [result addObject:@(streamObjs[j])];
+                    uint32_t sCls = cmio_get_class(streamObjs[j]);
+                    map[@(sCls)] = @(streamObjs[j]);
                 }
                 free(streamObjs);
             }
+        } else {
+            map[@(cls)] = @(devObjs[i]);
         }
     }
     free(devObjs);
-    return result;
+    return map;
 }
 
-// Try to set kCMIOFeatureControlPropertyAutomaticManual for a given control class.
-// Returns YES if the property was settable and the write succeeded.
-static BOOL cmio_set_auto_manual(CMIOObjectID deviceID, uint32_t controlClassID, UInt32 value) {
-    NSArray<NSNumber *> *controls = cmio_collect_controls(deviceID);
-    for (NSNumber *objNum in controls) {
-        CMIOObjectID ctrl = (CMIOObjectID)objNum.unsignedIntValue;
-        if (cmio_get_class(ctrl) != controlClassID) continue;
-        CMIOObjectPropertyAddress addr = {
-            kCMIOFeatureControlPropertyAutomaticManual,
-            kCMIOObjectPropertyScopeGlobal,
-            kCMIOObjectPropertyElementMain
-        };
-        Boolean settable = NO;
-        CMIOObjectIsPropertySettable(ctrl, &addr, &settable);
-        NSLog(@"[cmio] AutomaticManual settable=%d for class=0x%X", (int)settable, controlClassID);
-        if (!settable) return NO;
-        UInt32 sz = sizeof(value);
-        OSStatus err = CMIOObjectSetPropertyData(ctrl, &addr, 0, NULL, sz, &value);
-        NSLog(@"[cmio] set AutomaticManual=%u -> err=%d", value, (int)err);
-        return (err == noErr);
-    }
-    return NO;
-}
-
-static Float32 cmio_scale_for_kind(__unused const char *kind) {
-    return 1.0f;
-}
-
-static BOOL push_cmio_range(WcParamDesc *out, int *count, int capacity,
-                              CMIOObjectID ctrl, const char *kind) {
-    if (*count >= capacity) return NO;
-
+// Try to read a range from a CMIO feature control into p. Returns YES on success.
+static BOOL cmio_read_range(WcParamDesc *p, CMIOObjectID ctrl) {
     CMIOObjectPropertyAddress rangeAddr = {
         kCMIOFeatureControlPropertyNativeRange,
         kCMIOObjectPropertyScopeGlobal,
@@ -617,20 +554,38 @@ static BOOL push_cmio_range(WcParamDesc *out, int *count, int capacity,
     sz = sizeof(cur);
     CMIOObjectGetPropertyData(ctrl, &valAddr, 0, NULL, sz, &sz, &cur);
 
-    Float32 scale = cmio_scale_for_kind(kind);
-    WcParamDesc *p = &out[(*count)++];
-    memset(p, 0, sizeof(*p));
-    strlcpy(p->kind, kind, WC_MAX_KIND);
-    p->current = (int)roundf(cur * scale);
+    p->current = (int)roundf(cur);
     p->is_range = 1;
-    p->min      = (int)roundf((Float32)range.mMinimum * scale);
-    p->max      = (int)roundf((Float32)range.mMaximum * scale);
+    p->min      = (int)roundf((Float32)range.mMinimum);
+    p->max      = (int)roundf((Float32)range.mMaximum);
     p->step     = 1;
     return YES;
 }
 
+// Try to set kCMIOFeatureControlPropertyAutomaticManual for a control of the given class.
+static BOOL cmio_set_auto_manual(CMIOObjectID deviceID, uint32_t controlClassID, UInt32 value) {
+    NSDictionary<NSNumber*, NSNumber*> *map = cmio_build_class_map(deviceID);
+    NSNumber *ctrlNum = map[@(controlClassID)];
+    if (!ctrlNum) return NO;
+    CMIOObjectID ctrl = (CMIOObjectID)ctrlNum.unsignedIntValue;
+
+    CMIOObjectPropertyAddress addr = {
+        kCMIOFeatureControlPropertyAutomaticManual,
+        kCMIOObjectPropertyScopeGlobal,
+        kCMIOObjectPropertyElementMain
+    };
+    Boolean settable = NO;
+    CMIOObjectIsPropertySettable(ctrl, &addr, &settable);
+    NSLog(@"[cmio] AutomaticManual settable=%d for class=0x%X", (int)settable, controlClassID);
+    if (!settable) return NO;
+    UInt32 sz = sizeof(value);
+    OSStatus err = CMIOObjectSetPropertyData(ctrl, &addr, 0, NULL, sz, &value);
+    NSLog(@"[cmio] set AutomaticManual=%u -> err=%d", value, (int)err);
+    return (err == noErr);
+}
+
 // ---------------------------------------------------------------------------
-// Discrete option helpers
+// Discrete option helper
 // ---------------------------------------------------------------------------
 
 static void push_option(WcParamDesc *p, int value, const char *label) {
@@ -638,26 +593,6 @@ static void push_option(WcParamDesc *p, int value, const char *label) {
     p->options[p->num_options].value = value;
     strlcpy(p->options[p->num_options].label, label, WC_MAX_LABEL);
     p->num_options++;
-}
-
-static BOOL push_cmio_auto_manual(WcParamDesc *out, int *count, int capacity,
-                                   CMIOObjectID ctrl, const char *autoKind) {
-    if (*count >= capacity) return NO;
-    CMIOObjectPropertyAddress addr = {
-        kCMIOFeatureControlPropertyAutomaticManual,
-        kCMIOObjectPropertyScopeGlobal,
-        kCMIOObjectPropertyElementMain
-    };
-    UInt32 val = 0, sz = sizeof(val);
-    if (CMIOObjectGetPropertyData(ctrl, &addr, 0, NULL, sz, &sz, &val) != noErr) return NO;
-
-    WcParamDesc *p = &out[(*count)++];
-    memset(p, 0, sizeof(*p));
-    strlcpy(p->kind, autoKind, WC_MAX_KIND);
-    p->current = (int)val;
-    push_option(p, 0, "Manual");
-    push_option(p, 1, "Auto");
-    return YES;
 }
 
 // ---------------------------------------------------------------------------
@@ -734,12 +669,9 @@ void *wc_open_session(const char *unique_id) {
     CMIOObjectID cmioID = cmio_find_device(device.uniqueID);
     if (cmioID != kCMIOObjectUnknown) [handle setCmioDeviceID:(uint32_t)cmioID];
 
-    // Open UVC VideoControl interface for direct parameter writes via ControlRequest.
     uint8_t vcIf = 0, pu = 0, ct = 0;
     IOUSBInterfaceInterface190 **uvcIF = uvc_open_vc_interface(device.uniqueID, &vcIf, &pu, &ct);
-    if (uvcIF) {
-        [handle setUvcInterface:uvcIF vcInterface:vcIf pu:pu ct:ct];
-    }
+    if (uvcIF) [handle setUvcInterface:uvcIF vcInterface:vcIf pu:pu ct:ct];
 
     return (__bridge_retained void *)handle;
 }
@@ -748,7 +680,7 @@ void wc_close_session(void *handle) {
     if (!handle) return;
     WcSessionHandle *h = (__bridge_transfer WcSessionHandle *)handle;
     [h.session stopRunning];
-    // WcSessionHandle dealloc closes the UVC device.
+    // WcSessionHandle dealloc closes the UVC interface.
 }
 
 int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
@@ -768,195 +700,91 @@ int wc_capture_frame(void *handle, uint8_t **out_data, size_t *out_size) {
 void wc_free_frame(uint8_t *data) { free(data); }
 
 // ---------------------------------------------------------------------------
-// C interface — parameter enumeration (reads via CMIO)
+// C interface — parameter enumeration
 // ---------------------------------------------------------------------------
 
 int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
     if (!handle || !out || capacity <= 0) return 0;
     WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
-    AVCaptureDevice *dev = h.device;
-    if (!dev) return 0;
+    if (!h.device) return 0;
+
+    // Build CMIO class → control-object map once for the whole enumeration.
+    NSDictionary<NSNumber*, NSNumber*> *cmioMap = nil;
+    CMIOObjectID cmioID = (CMIOObjectID)[h cmioDeviceID];
+    if (cmioID != kCMIOObjectUnknown)
+        cmioMap = cmio_build_class_map(cmioID);
 
     int count = 0;
-    CMIOObjectID cmioID = (CMIOObjectID)[h cmioDeviceID];
-    if (cmioID != kCMIOObjectUnknown) {
-        NSArray<NSNumber *> *controls = cmio_collect_controls(cmioID);
-        for (NSNumber *objNum in controls) {
-            CMIOObjectID ctrl = (CMIOObjectID)objNum.unsignedIntValue;
-            const char *kind = cmio_kind_for_class(cmio_get_class(ctrl));
-            if (!kind) continue;
-            const char *autoKind = cmio_auto_kind_for_range_kind(kind);
-            if (autoKind) push_cmio_auto_manual(out, &count, capacity, ctrl, autoKind);
-            push_cmio_range(out, &count, capacity, ctrl, kind);
-        }
-    }
+    for (int i = 0; i < kControlCount && count < capacity; i++) {
+        const ControlDesc *d = &kControls[i];
+        WcParamDesc *p = &out[count];
+        memset(p, 0, sizeof(*p));
+        strlcpy(p->kind, d->kind, WC_MAX_KIND);
+        BOOL emitted = NO;
 
-    // Some drivers (e.g. Logitech on macOS) expose the absolute controls via CMIO but not
-    // the AutomaticManual toggle, or the toggle reflects AVFoundation's state rather than
-    // the true UVC hardware state. Fall back to UVC GET_CUR for auto toggles on CT controls.
-    if ([h uvcHasCT]) {
-        // focus_auto
-        if (count < capacity) {
-            BOOL hasFocusAbsolute = NO, hasFocusAuto = NO;
-            for (int i = 0; i < count; i++) {
-                if (strcmp(out[i].kind, "focus_absolute") == 0) hasFocusAbsolute = YES;
-                if (strcmp(out[i].kind, "focus_auto")     == 0) hasFocusAuto     = YES;
+        // --- Range controls: try CMIO first, fall back to UVC GET_CUR/MIN/MAX ---
+        if (d->presentation == CTRL_RANGE) {
+            if (d->cmio_class && cmioMap) {
+                NSNumber *ctrlNum = cmioMap[@(d->cmio_class)];
+                if (ctrlNum)
+                    emitted = cmio_read_range(p, (CMIOObjectID)ctrlNum.unsignedIntValue);
             }
-            if (hasFocusAbsolute && !hasFocusAuto) {
-                uint8_t v = 0;
-                if ([h uvcReadCTSelector:0x08 intoBytes:&v len:1] == 0) {
-                    WcParamDesc *p = &out[count++];
-                    memset(p, 0, sizeof(*p));
-                    strlcpy(p->kind, "focus_auto", WC_MAX_KIND);
-                    p->current = (int)v;
-                    push_option(p, 0, "Manual");
-                    push_option(p, 1, "Auto");
+            if (!emitted && (d->uvc_is_pu ? [h uvcHasPU] : [h uvcHasCT])) {
+                int32_t cur = 0, minV = 0, maxV = 0, res = 1;
+                if ([h uvcGetSelector:d->uvc_selector request:0x81 isPU:d->uvc_is_pu out:&cur  size:d->uvc_size] == 0 &&
+                    [h uvcGetSelector:d->uvc_selector request:0x82 isPU:d->uvc_is_pu out:&minV size:d->uvc_size] == 0 &&
+                    [h uvcGetSelector:d->uvc_selector request:0x83 isPU:d->uvc_is_pu out:&maxV size:d->uvc_size] == 0 &&
+                    minV < maxV) {
+                    [h uvcGetSelector:d->uvc_selector request:0x84 isPU:d->uvc_is_pu out:&res size:d->uvc_size];
+                    p->current  = (int)cur;
+                    p->is_range = 1;
+                    p->min      = (int)minV;
+                    p->max      = (int)maxV;
+                    p->step     = (res > 0) ? (int)res : 1;
+                    emitted = YES;
                 }
             }
         }
-        // exposure_auto: always read via UVC GET_CUR so the state reflects actual hardware,
-        // not AVFoundation's view (which AVFoundation may have overridden).
-        if (count < capacity) {
-            BOOL hasExposureAbsolute = NO, hasExposureAuto = NO;
-            for (int i = 0; i < count; i++) {
-                if (strcmp(out[i].kind, "exposure_time_absolute") == 0) hasExposureAbsolute = YES;
-                if (strcmp(out[i].kind, "exposure_auto")          == 0) hasExposureAuto     = YES;
-            }
-            if (hasExposureAbsolute) {
-                uint8_t aeMode = 0;
-                if ([h uvcReadCTSelector:0x02 intoBytes:&aeMode len:1] == 0) {
-                    // UVC AE mode: 1=manual→0, anything else→1 (auto)
-                    int logicalAuto = (aeMode == 1) ? 0 : 1;
-                    if (hasExposureAuto) {
-                        // Update existing CMIO-emitted entry with the real hardware value.
-                        for (int i = 0; i < count; i++) {
-                            if (strcmp(out[i].kind, "exposure_auto") == 0) {
-                                out[i].current = logicalAuto;
-                                break;
-                            }
-                        }
-                    } else {
-                        WcParamDesc *p = &out[count++];
-                        memset(p, 0, sizeof(*p));
-                        strlcpy(p->kind, "exposure_auto", WC_MAX_KIND);
-                        p->current = logicalAuto;
+
+        // --- Discrete controls: always read from UVC for accurate hardware state ---
+        else if (d->uvc_is_pu ? [h uvcHasPU] : [h uvcHasCT]) {
+            int32_t cur = 0;
+            if ([h uvcGetSelector:d->uvc_selector request:0x81 isPU:d->uvc_is_pu out:&cur size:d->uvc_size] == 0) {
+                // exposure_auto: UVC AE mode 1=manual → logical 0, otherwise → logical 1.
+                if (strcmp(d->kind, "exposure_auto") == 0)
+                    cur = (cur == 1) ? 0 : 1;
+                p->current = (int)cur;
+
+                switch (d->presentation) {
+                    case CTRL_BOOL_MANUAL_AUTO:
                         push_option(p, 0, "Manual");
                         push_option(p, 1, "Auto");
-                    }
+                        emitted = YES;
+                        break;
+                    case CTRL_BOOL_OFF_ON:
+                        push_option(p, 0, "Off");
+                        push_option(p, 1, "On");
+                        emitted = YES;
+                        break;
+                    case CTRL_ENUM_PLF:
+                        push_option(p, 0, "Disabled");
+                        push_option(p, 1, "50 Hz");
+                        push_option(p, 2, "60 Hz");
+                        emitted = YES;
+                        break;
+                    case CTRL_RANGE:
+                        break; // handled above
                 }
             }
         }
 
-        // white_balance fallback: CMIO often doesn't expose the temperature range on UVC
-        // cameras (especially when WB is in auto). Read CUR/MIN/MAX/RES via PU GET requests.
-        if ([h uvcHasPU] && count < capacity) {
-            BOOL hasWBTemp = NO, hasWBAuto = NO;
-            for (int i = 0; i < count; i++) {
-                if (strcmp(out[i].kind, "white_balance_temperature") == 0) hasWBTemp = YES;
-                if (strcmp(out[i].kind, "white_balance_auto")        == 0) hasWBAuto = YES;
-            }
-            if (!hasWBTemp) {
-                uint16_t cur = 0, min = 0, max = 0, res = 0;
-                if ([h uvcGetPUSelector:0x0A request:0x81 intoBytes:&cur len:2] == 0 &&
-                    [h uvcGetPUSelector:0x0A request:0x82 intoBytes:&min len:2] == 0 &&
-                    [h uvcGetPUSelector:0x0A request:0x83 intoBytes:&max len:2] == 0 &&
-                    min < max) {
-                    [h uvcGetPUSelector:0x0A request:0x84 intoBytes:&res len:2];
-                    WcParamDesc *p = &out[count++];
-                    memset(p, 0, sizeof(*p));
-                    strlcpy(p->kind, "white_balance_temperature", WC_MAX_KIND);
-                    p->current  = (int)(int16_t)OSSwapLittleToHostInt16(cur);
-                    p->is_range = 1;
-                    p->min      = (int)(int16_t)OSSwapLittleToHostInt16(min);
-                    p->max      = (int)(int16_t)OSSwapLittleToHostInt16(max);
-                    p->step     = (res > 0) ? (int)(int16_t)OSSwapLittleToHostInt16(res) : 1;
-                }
-            }
-            if (!hasWBAuto && count < capacity) {
-                uint8_t v = 0;
-                if ([h uvcGetPUSelector:0x0B request:0x81 intoBytes:&v len:1] == 0) {
-                    WcParamDesc *p = &out[count++];
-                    memset(p, 0, sizeof(*p));
-                    strlcpy(p->kind, "white_balance_auto", WC_MAX_KIND);
-                    p->current = (int)v;
-                    push_option(p, 0, "Manual");
-                    push_option(p, 1, "Auto");
-                }
-            }
-        }
+        if (emitted) count++;
     }
-
-    // Generic UVC fallback: probe any remaining controls not yet emitted by CMIO/specific blocks.
-    if ([h uvcAvailable]) {
-        for (int i = 0; i < kUVCControlCount && count < capacity; i++) {
-            const UVCEntry *e = &kUVCControls[i];
-
-            // Skip if already in output.
-            BOOL alreadyPresent = NO;
-            for (int j = 0; j < count; j++) {
-                if (strcmp(out[j].kind, e->kind) == 0) { alreadyPresent = YES; break; }
-            }
-            if (alreadyPresent) continue;
-
-            // Skip if required unit is not available for this camera.
-            if (e->isPU && ![h uvcHasPU]) continue;
-            if (!e->isPU && ![h uvcHasCT]) continue;
-
-            // Probe GET_CUR — if this control doesn't exist on the camera, skip it.
-            int32_t cur = 0;
-            if ([h uvcGetSelector:e->selector request:0x81 isPU:e->isPU out:&cur size:e->size] != 0)
-                continue;
-
-            WcParamDesc *p = &out[count];
-            memset(p, 0, sizeof(*p));
-            strlcpy(p->kind, e->kind, WC_MAX_KIND);
-            p->current = (int)cur;
-
-            // power_line_frequency: fixed enum regardless of GET_MIN/MAX.
-            if (strcmp(e->kind, "power_line_frequency") == 0) {
-                push_option(p, 0, "Disabled");
-                push_option(p, 1, "50 Hz");
-                push_option(p, 2, "60 Hz");
-                count++;
-                continue;
-            }
-
-            // Pure on/off toggles with no range meaning.
-            if (strcmp(e->kind, "color_enable") == 0) {
-                push_option(p, 0, "Off");
-                push_option(p, 1, "On");
-                count++;
-                continue;
-            }
-            if (strcmp(e->kind, "hue_auto") == 0) {
-                push_option(p, 0, "Manual");
-                push_option(p, 1, "Auto");
-                count++;
-                continue;
-            }
-
-            // For everything else try GET_MIN / GET_MAX; emit as range if valid.
-            int32_t minVal = 0, maxVal = 0;
-            if ([h uvcGetSelector:e->selector request:0x82 isPU:e->isPU out:&minVal size:e->size] == 0 &&
-                [h uvcGetSelector:e->selector request:0x83 isPU:e->isPU out:&maxVal size:e->size] == 0 &&
-                minVal < maxVal) {
-                int32_t res = 1;
-                [h uvcGetSelector:e->selector request:0x84 isPU:e->isPU out:&res size:e->size];
-                p->is_range = 1;
-                p->min      = (int)minVal;
-                p->max      = (int)maxVal;
-                p->step     = (res > 0) ? (int)res : 1;
-                count++;
-            }
-            // If no valid range is available, discard (don't increment count).
-        }
-    }
-
     return count;
 }
 
 // ---------------------------------------------------------------------------
-// C interface — parameter setting (writes via UVC/IOKit)
+// C interface — parameter setting
 // ---------------------------------------------------------------------------
 
 int wc_set_parameter(void *handle, const char *kind, int value) {
@@ -964,43 +792,52 @@ int wc_set_parameter(void *handle, const char *kind, int value) {
     WcSessionHandle *h = (__bridge WcSessionHandle *)handle;
     if (![h uvcAvailable]) return -1;
 
-    // For exposure controls the kernel UVC driver manages AE state internally.
-    // Cooperate via CMIO so the kernel driver switches mode before we send UVC commands.
+    // Look up descriptor.
+    const ControlDesc *d = NULL;
+    for (int i = 0; i < kControlCount; i++) {
+        if (strcmp(kControls[i].kind, kind) == 0) { d = &kControls[i]; break; }
+    }
+    if (!d) return -1;
+
+    // CMIO cooperation: switch the kernel driver's auto/manual state before the UVC write.
+    // Range controls always force manual (0); auto toggles mirror the requested value.
     CMIOObjectID cmioID = (CMIOObjectID)[h cmioDeviceID];
-    if (cmioID != kCMIOObjectUnknown) {
-        if (strcmp(kind, "exposure_auto") == 0) {
-            cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, value ? 1 : 0);
-        } else if (strcmp(kind, "exposure_time_absolute") == 0) {
-            cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, 0);
-        } else if (strcmp(kind, "white_balance_auto") == 0) {
-            cmio_set_auto_manual(cmioID, kCMIOTemperatureControlClassID, value ? 1 : 0);
-        }
+    if (cmioID != kCMIOObjectUnknown && d->cmio_auto_class != 0) {
+        UInt32 autoVal = (d->presentation == CTRL_RANGE) ? 0 : (value ? 1 : 0);
+        cmio_set_auto_manual(cmioID, d->cmio_auto_class, autoVal);
     }
 
     int ret = [h uvcWriteKind:kind value:(int32_t)value];
 
-    // AVFoundation re-applies its auto modes continuously — sync mode so it stops
-    // fighting our UVC writes for focus and white balance.
-    if (ret == 0) {
+    // AVFoundation continuously re-applies its own auto modes; sync it after a successful write
+    // so it stops fighting our UVC state.
+    if (ret == 0 && d->avf_sync != AVF_NONE) {
         AVCaptureDevice *dev = h.device;
-        if (strcmp(kind, "focus_auto") == 0 && [dev lockForConfiguration:nil]) {
-            BOOL isAuto = (value != 0);
-            AVCaptureFocusMode mode = isAuto ? AVCaptureFocusModeContinuousAutoFocus
-                                             : AVCaptureFocusModeLocked;
-            if ([dev isFocusModeSupported:mode]) dev.focusMode = mode;
-            [dev unlockForConfiguration];
-        } else if (strcmp(kind, "white_balance_auto") == 0 && [dev lockForConfiguration:nil]) {
-            BOOL isAuto = (value != 0);
-            AVCaptureWhiteBalanceMode mode = isAuto ? AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance
-                                                    : AVCaptureWhiteBalanceModeLocked;
-            if ([dev isWhiteBalanceModeSupported:mode]) dev.whiteBalanceMode = mode;
-            [dev unlockForConfiguration];
-        } else if (strcmp(kind, "exposure_auto") == 0 && [dev lockForConfiguration:nil]) {
-            // Lock AVFoundation's AE loop so it stops overriding exposure_time_absolute.
-            BOOL isAuto = (value != 0);
-            AVCaptureExposureMode mode = isAuto ? AVCaptureExposureModeContinuousAutoExposure
-                                                : AVCaptureExposureModeLocked;
-            if ([dev isExposureModeSupported:mode]) dev.exposureMode = mode;
+        BOOL isAuto = (value != 0);
+        if ([dev lockForConfiguration:nil]) {
+            switch (d->avf_sync) {
+                case AVF_FOCUS: {
+                    AVCaptureFocusMode mode = isAuto ? AVCaptureFocusModeContinuousAutoFocus
+                                                     : AVCaptureFocusModeLocked;
+                    if ([dev isFocusModeSupported:mode]) dev.focusMode = mode;
+                    break;
+                }
+                case AVF_WHITE_BALANCE: {
+                    AVCaptureWhiteBalanceMode mode = isAuto
+                        ? AVCaptureWhiteBalanceModeContinuousAutoWhiteBalance
+                        : AVCaptureWhiteBalanceModeLocked;
+                    if ([dev isWhiteBalanceModeSupported:mode]) dev.whiteBalanceMode = mode;
+                    break;
+                }
+                case AVF_EXPOSURE: {
+                    AVCaptureExposureMode mode = isAuto ? AVCaptureExposureModeContinuousAutoExposure
+                                                        : AVCaptureExposureModeLocked;
+                    if ([dev isExposureModeSupported:mode]) dev.exposureMode = mode;
+                    break;
+                }
+                case AVF_NONE:
+                    break;
+            }
             [dev unlockForConfiguration];
         }
     }
