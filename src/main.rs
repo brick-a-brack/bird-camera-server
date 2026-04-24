@@ -33,6 +33,7 @@ async fn health() -> Json<HealthCheck> {
 fn build_backends() -> BackendState {
     #[allow(unused_mut)]
     let mut map: HashMap<String, Arc<dyn camera::CameraBackend>> = HashMap::new();
+    eprintln!("[main] build_backends() called");
 
     #[cfg(feature = "backend-canon")]
     match backends::canon::CanonBackend::new() {
@@ -52,6 +53,17 @@ fn build_backends() -> BackendState {
         Err(e) => eprintln!("[error] AVFoundation backend failed to initialize: {e}"),
     }
 
+    eprintln!("[main] webcam-windows feature={} target_windows={}", cfg!(feature = "backend-webcam-windows"), cfg!(target_os = "windows"));
+    #[cfg(all(feature = "backend-webcam-windows", target_os = "windows"))]
+    match backends::webcam_windows::WebcamWindowsBackend::new() {
+        Ok(b) => {
+            let b: Arc<dyn camera::CameraBackend> = Arc::new(b);
+            map.insert(b.backend_id().to_string(), b);
+        }
+        Err(e) => eprintln!("[error] Windows webcam backend failed to initialize: {e}"),
+    }
+
+    eprintln!("[main] registered backends: {:?}", map.keys().collect::<Vec<_>>());
     Arc::new(map)
 }
 
