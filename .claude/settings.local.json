@@ -16,7 +16,11 @@
       "Bash(~/.cargo/bin/cargo clean *)",
       "Bash(grep -v \"^--$\")",
       "WebFetch(domain:nadavrub.wordpress.com)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(grep -rn \"MF_DEVSOURCE\\\\|MFCreateDeviceSource\\\\|IMFSourceReader\" /c/Users/mbaco/Documents/dev/chromium/media/capture/video/win/*.h)",
+      "Bash(cargo search:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d['crate']['newest_version']\\)\")",
+      "Bash(grep \"no \\\\`\")"
     ]
   }
 }
