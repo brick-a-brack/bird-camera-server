@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use axum::{routing::{get, put}, Json, Router};
 use axum::response::Html;
+use tower_http::cors::CorsLayer;
 use serde::Serialize;
 
 use routes::cameras::{self, AppState, BackendState};
@@ -80,7 +81,8 @@ async fn run_server() {
         .route("/cameras/{id}/parameters", get(cameras::get_parameters))
         .route("/cameras/{id}/settings", put(cameras::set_parameter))
         .route("/cameras/{id}/liveview", get(cameras::live_view))
-        .with_state(state);
+        .with_state(state)
+        .layer(CorsLayer::permissive());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
