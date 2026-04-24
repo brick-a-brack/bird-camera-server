@@ -290,12 +290,13 @@ typedef enum { AVF_NONE, AVF_FOCUS, AVF_WHITE_BALANCE, AVF_EXPOSURE } CtrlAvfSyn
 typedef struct {
     const char      *kind;
     uint8_t          uvc_selector;
-    BOOL             uvc_is_pu;    // YES = Processing Unit, NO = Camera Terminal
-    uint8_t          uvc_size;     // bytes on the wire: 1, 2, or 4
-    uint32_t         cmio_class;   // CMIO class for range reads; 0 = UVC-only
+    BOOL             uvc_is_pu;       // YES = Processing Unit, NO = Camera Terminal
+    uint8_t          uvc_size;        // bytes on the wire: 1, 2, or 4
+    uint32_t         cmio_class;      // CMIO class for range reads; 0 = UVC-only
     uint32_t         cmio_auto_class; // CMIO class to cooperate with on write; 0 = none
     CtrlPresentation presentation;
     CtrlAvfSync      avf_sync;
+    const char      *guarded_by;      // kind of the auto control that gates this one; NULL = always editable
 } ControlDesc;
 
 // exposure_auto uses a non-standard UVC value mapping:
@@ -305,29 +306,29 @@ typedef struct {
 
 static const ControlDesc kControls[] = {
     // Processing Unit controls
-    //  kind                        sel    PU?   sz  cmio_class                               cmio_auto_class                   presentation           avf_sync
-    { "backlight_compensation",    0x01, YES,  2, kCMIOBacklightCompensationControlClassID, 0,                                CTRL_RANGE,            AVF_NONE          },
-    { "brightness",                0x02, YES,  2, kCMIOBrightnessControlClassID,            0,                                CTRL_RANGE,            AVF_NONE          },
-    { "contrast",                  0x03, YES,  2, kCMIOContrastControlClassID,              0,                                CTRL_RANGE,            AVF_NONE          },
-    { "gain",                      0x04, YES,  2, kCMIOGainControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE          },
-    { "power_line_frequency",      0x05, YES,  1, 0,                                        0,                                CTRL_ENUM_PLF,         AVF_NONE          },
-    { "hue",                       0x06, YES,  2, kCMIOHueControlClassID,                   0,                                CTRL_RANGE,            AVF_NONE          },
-    { "saturation",                0x07, YES,  2, kCMIOSaturationControlClassID,            0,                                CTRL_RANGE,            AVF_NONE          },
-    { "sharpness",                 0x08, YES,  2, kCMIOSharpnessControlClassID,             0,                                CTRL_RANGE,            AVF_NONE          },
-    { "gamma",                     0x09, YES,  2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
-    { "white_balance_temperature", 0x0A, YES,  2, kCMIOTemperatureControlClassID,           0,                                CTRL_RANGE,            AVF_NONE          },
-    { "white_balance_auto",        0x0B, YES,  1, 0,                                        kCMIOTemperatureControlClassID,   CTRL_BOOL_MANUAL_AUTO, AVF_WHITE_BALANCE },
-    { "color_enable",              0x0C, YES,  1, 0,                                        0,                                CTRL_BOOL_OFF_ON,      AVF_NONE          },
-    { "hue_auto",                  0x0F, YES,  1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_NONE          },
+    //  kind                        sel    PU?   sz  cmio_class                               cmio_auto_class                   presentation           avf_sync        guarded_by
+    { "backlight_compensation",    0x01, YES,  2, kCMIOBacklightCompensationControlClassID, 0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "brightness",                0x02, YES,  2, kCMIOBrightnessControlClassID,            0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "contrast",                  0x03, YES,  2, kCMIOContrastControlClassID,              0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "gain",                      0x04, YES,  2, kCMIOGainControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "power_line_frequency",      0x05, YES,  1, 0,                                        0,                                CTRL_ENUM_PLF,         AVF_NONE,          NULL                    },
+    { "hue",                       0x06, YES,  2, kCMIOHueControlClassID,                   0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "saturation",                0x07, YES,  2, kCMIOSaturationControlClassID,            0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "sharpness",                 0x08, YES,  2, kCMIOSharpnessControlClassID,             0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "gamma",                     0x09, YES,  2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "white_balance_temperature", 0x0A, YES,  2, kCMIOTemperatureControlClassID,           0,                                CTRL_RANGE,            AVF_NONE,          "white_balance_auto"    },
+    { "white_balance_auto",        0x0B, YES,  1, 0,                                        kCMIOTemperatureControlClassID,   CTRL_BOOL_MANUAL_AUTO, AVF_WHITE_BALANCE, NULL                    },
+    { "color_enable",              0x0C, YES,  1, 0,                                        0,                                CTRL_BOOL_OFF_ON,      AVF_NONE,          NULL                    },
+    { "hue_auto",                  0x0F, YES,  1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_NONE,          NULL                    },
     // Camera Terminal controls
-    { "exposure_auto",             0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE      },
-    { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              kCMIOExposureControlClassID,      CTRL_RANGE,            AVF_NONE          },
-    { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE          },
-    { "focus_auto",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS         },
-    { "iris_absolute",             0x09, NO,   2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
-    { "zoom_absolute",             0x0B, NO,   2, kCMIOZoomControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE          },
-    { "pan_absolute",              0x0D, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
-    { "tilt_absolute",             0x0E, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE          },
+    { "exposure_auto",             0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE,      NULL                    },
+    { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              0,                                CTRL_RANGE,            AVF_NONE,          "exposure_auto"         },
+    { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE,          "focus_auto"            },
+    { "focus_auto",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS,         NULL                    },
+    { "iris_absolute",             0x09, NO,   2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "zoom_absolute",             0x0B, NO,   2, kCMIOZoomControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "pan_absolute",              0x0D, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
+    { "tilt_absolute",             0x0E, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
 };
 static const int kControlCount = (int)(sizeof(kControls) / sizeof(kControls[0]));
 
@@ -411,15 +412,6 @@ static const int kControlCount = (int)(sizeof(kControls) / sizeof(kControls[0]))
     // exposure_auto: logical 0 (manual) → UVC AE mode 1, logical 1 (auto) → UVC AE mode 8 (aperture priority).
     if (strcmp(kind, "exposure_auto") == 0)
         uvcVal = (value == 0) ? 1 : 8;
-
-    // exposure_time_absolute: assert manual AE mode on the CT before writing the time value.
-    if (strcmp(kind, "exposure_time_absolute") == 0 && _uvcCT) {
-        uint8_t aeManual = 1;
-        uvc_set_cur(_uvcIF, _uvcCT, 0x02, _uvcVCIf, &aeManual, 1);
-        uint8_t readBack = 0xFF;
-        uvc_get_req(_uvcIF, 0x81, _uvcCT, 0x02, _uvcVCIf, &readBack, 1);
-        NSLog(@"[uvc] AE mode after manual assert: camera reports 0x%02X (want 0x01)", readBack);
-    }
 
     uint8_t buf[4] = {0};
     switch (d->uvc_size) {
@@ -780,7 +772,30 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
 
         if (emitted) count++;
     }
-    return count;
+
+    // Remove range controls that are locked because their linked auto mode is active.
+    // A control is suppressed when guarded_by names an auto control whose current value is 1 (Auto).
+    int out_count = 0;
+    for (int i = 0; i < count; i++) {
+        const ControlDesc *d = NULL;
+        for (int j = 0; j < kControlCount; j++) {
+            if (strcmp(kControls[j].kind, out[i].kind) == 0) { d = &kControls[j]; break; }
+        }
+        BOOL suppress = NO;
+        if (d && d->guarded_by) {
+            for (int j = 0; j < count; j++) {
+                if (strcmp(out[j].kind, d->guarded_by) == 0) {
+                    suppress = (out[j].current == 1);
+                    break;
+                }
+            }
+        }
+        if (!suppress) {
+            if (out_count != i) out[out_count] = out[i];
+            out_count++;
+        }
+    }
+    return out_count;
 }
 
 // ---------------------------------------------------------------------------
