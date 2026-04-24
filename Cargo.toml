@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 backend-canon = []
-backend-avfoundation = []
+backend-webcam-macos = []
 
 [dependencies]
 axum = "0.8"

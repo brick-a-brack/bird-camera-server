@@ -2,8 +2,8 @@ use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-changed=external/EDSDK");
-    println!("cargo:rerun-if-changed=src/backends/avfoundation/bridge.m");
-    println!("cargo:rerun-if-changed=src/backends/avfoundation/bridge.h");
+    println!("cargo:rerun-if-changed=src/backends/webcam_macos/bridge.m");
+    println!("cargo:rerun-if-changed=src/backends/webcam_macos/bridge.h");
 
     if std::env::var_os("CARGO_FEATURE_BACKEND_CANON").is_some() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
@@ -12,11 +12,11 @@ fn main() {
     }
 
     if cfg!(target_os = "macos")
-        && std::env::var_os("CARGO_FEATURE_BACKEND_AVFOUNDATION").is_some()
+        && std::env::var_os("CARGO_FEATURE_BACKEND_WEBCAM_MACOS").is_some()
     {
         cc::Build::new()
-            .file("src/backends/avfoundation/bridge.m")
-            .include("src/backends/avfoundation")
+            .file("src/backends/webcam_macos/bridge.m")
+            .include("src/backends/webcam_macos")
             .flag("-fobjc-arc")
             .flag("-fmodules")
             .compile("webcam_macos_bridge");

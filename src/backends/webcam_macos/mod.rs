@@ -103,16 +103,16 @@ enum Command {
 // Backend
 // ---------------------------------------------------------------------------
 
-pub struct AvFoundationBackend {
+pub struct WebcamMacosBackend {
     tx: mpsc::Sender<Command>,
 }
 
-impl AvFoundationBackend {
+impl WebcamMacosBackend {
     pub fn new() -> Result<Self, CameraError> {
         let (tx, rx) = mpsc::channel::<Command>();
 
         std::thread::Builder::new()
-            .name("avfoundation".to_string())
+            .name("webcam-macos".to_string())
             .spawn(move || actor_thread(rx))
             .map_err(|_| CameraError::SdkError(0xFFFF_FFFF))?;
 
@@ -120,15 +120,15 @@ impl AvFoundationBackend {
     }
 }
 
-impl Drop for AvFoundationBackend {
+impl Drop for WebcamMacosBackend {
     fn drop(&mut self) {
         let _ = self.tx.send(Command::Shutdown);
     }
 }
 
-impl CameraBackend for AvFoundationBackend {
+impl CameraBackend for WebcamMacosBackend {
     fn backend_id(&self) -> &str {
-        "avfoundation"
+        "webcam-macos"
     }
 
     fn list_devices(&self) -> Result<Vec<DeviceInfo>, CameraError> {
@@ -282,7 +282,7 @@ fn list_devices_impl(sessions: &HashMap<String, SessionHandle>) -> Result<Vec<De
             let name = unsafe { CStr::from_ptr(d.name.as_ptr()) }
                 .to_string_lossy()
                 .into_owned();
-            let id = DeviceId::new("avfoundation", &native_id).encode();
+            let id = DeviceId::new("webcam-macos", &native_id).encode();
             let connected = sessions.contains_key(&native_id);
             DeviceInfo { id, name, connected }
         })
