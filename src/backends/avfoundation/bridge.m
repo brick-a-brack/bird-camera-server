@@ -109,20 +109,29 @@ typedef struct { const char *kind; uint8_t selector; BOOL isPU; uint8_t size; } 
 
 // Processing Unit (PU) and Camera Terminal (CT) controls with UVC selectors and data sizes.
 static const UVCEntry kUVCControls[] = {
+    // Processing Unit
     { "backlight_compensation",    0x01, YES, 2 },
     { "brightness",                0x02, YES, 2 },
     { "contrast",                  0x03, YES, 2 },
     { "gain",                      0x04, YES, 2 },
+    { "power_line_frequency",      0x05, YES, 1 }, // enum: 0=disabled,1=50Hz,2=60Hz
     { "hue",                       0x06, YES, 2 },
     { "saturation",                0x07, YES, 2 },
     { "sharpness",                 0x08, YES, 2 },
+    { "gamma",                     0x09, YES, 2 },
     { "white_balance_temperature", 0x0A, YES, 2 },
     { "white_balance_auto",        0x0B, YES, 1 },
+    { "color_enable",              0x0C, YES, 1 },
+    { "hue_auto",                  0x0F, YES, 1 }, // UVC 1.5
+    // Camera Terminal
     { "exposure_auto",             0x02, NO,  1 }, // CT AE mode: 1=manual, 8=aperture priority
     { "exposure_time_absolute",    0x04, NO,  4 }, // CT, 100µs units
-    { "focus_auto",                0x08, NO,  1 }, // CT: 0=manual, 1=auto
-    { "focus_absolute",            0x06, NO,  2 }, // CT, mm units
+    { "focus_absolute",            0x06, NO,  2 },
+    { "focus_auto",                0x08, NO,  1 },
+    { "iris_absolute",             0x09, NO,  2 },
     { "zoom_absolute",             0x0B, NO,  2 },
+    { "pan_absolute",              0x0D, NO,  4 }, // signed 32-bit, arcseconds
+    { "tilt_absolute",             0x0E, NO,  4 }, // signed 32-bit, arcseconds
 };
 static const int kUVCControlCount = (int)(sizeof(kUVCControls) / sizeof(kUVCControls[0]));
 
@@ -293,6 +302,21 @@ static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
     return uvc_get_req(intf, 0x81, unitID, selector, ifNum, data, len);
 }
 
+// Read a 1/2/4-byte UVC value and return it as a signed int32_t (little-endian).
+// 1-byte values are treated as unsigned; 2-byte as signed int16; 4-byte as signed int32.
+static int uvc_read_int(IOUSBInterfaceInterface190 **intf, uint8_t request, uint8_t unitID,
+                         uint8_t selector, uint8_t ifNum, uint8_t size, int32_t *out) {
+    uint8_t buf[4] = {0};
+    if (uvc_get_req(intf, request, unitID, selector, ifNum, buf, size) != 0) return -1;
+    switch (size) {
+        case 1: *out = (int32_t)(uint8_t)buf[0]; break;
+        case 2: { int16_t v; memcpy(&v, buf, 2); *out = (int32_t)v; break; }
+        case 4: { int32_t v; memcpy(&v, buf, 4); *out = v; break; }
+        default: return -1;
+    }
+    return 0;
+}
+
 // ---------------------------------------------------------------------------
 // WcSessionHandle
 // ---------------------------------------------------------------------------
@@ -313,6 +337,7 @@ static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
 - (BOOL)uvcHasPU;
 - (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len;
 - (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len;
+- (int)uvcGetSelector:(uint8_t)selector request:(uint8_t)req isPU:(BOOL)isPU out:(int32_t *)out size:(uint8_t)size;
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value;
 @end
 
@@ -357,6 +382,13 @@ static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
 - (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len {
     if (!_uvcIF || !_uvcPU) return -1;
     return uvc_get_req(_uvcIF, req, _uvcPU, selector, _uvcVCIf, buf, len);
+}
+
+- (int)uvcGetSelector:(uint8_t)selector request:(uint8_t)req isPU:(BOOL)isPU out:(int32_t *)out size:(uint8_t)size {
+    if (!_uvcIF) return -1;
+    uint8_t unitID = isPU ? _uvcPU : _uvcCT;
+    if (!unitID) return -1;
+    return uvc_read_int(_uvcIF, req, unitID, selector, _uvcVCIf, size, out);
 }
 
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value {
@@ -851,6 +883,72 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
                     push_option(p, 1, "Auto");
                 }
             }
+        }
+    }
+
+    // Generic UVC fallback: probe any remaining controls not yet emitted by CMIO/specific blocks.
+    if ([h uvcAvailable]) {
+        for (int i = 0; i < kUVCControlCount && count < capacity; i++) {
+            const UVCEntry *e = &kUVCControls[i];
+
+            // Skip if already in output.
+            BOOL alreadyPresent = NO;
+            for (int j = 0; j < count; j++) {
+                if (strcmp(out[j].kind, e->kind) == 0) { alreadyPresent = YES; break; }
+            }
+            if (alreadyPresent) continue;
+
+            // Skip if required unit is not available for this camera.
+            if (e->isPU && ![h uvcHasPU]) continue;
+            if (!e->isPU && ![h uvcHasCT]) continue;
+
+            // Probe GET_CUR — if this control doesn't exist on the camera, skip it.
+            int32_t cur = 0;
+            if ([h uvcGetSelector:e->selector request:0x81 isPU:e->isPU out:&cur size:e->size] != 0)
+                continue;
+
+            WcParamDesc *p = &out[count];
+            memset(p, 0, sizeof(*p));
+            strlcpy(p->kind, e->kind, WC_MAX_KIND);
+            p->current = (int)cur;
+
+            // power_line_frequency: fixed enum regardless of GET_MIN/MAX.
+            if (strcmp(e->kind, "power_line_frequency") == 0) {
+                push_option(p, 0, "Disabled");
+                push_option(p, 1, "50 Hz");
+                push_option(p, 2, "60 Hz");
+                count++;
+                continue;
+            }
+
+            // Pure on/off toggles with no range meaning.
+            if (strcmp(e->kind, "color_enable") == 0) {
+                push_option(p, 0, "Off");
+                push_option(p, 1, "On");
+                count++;
+                continue;
+            }
+            if (strcmp(e->kind, "hue_auto") == 0) {
+                push_option(p, 0, "Manual");
+                push_option(p, 1, "Auto");
+                count++;
+                continue;
+            }
+
+            // For everything else try GET_MIN / GET_MAX; emit as range if valid.
+            int32_t minVal = 0, maxVal = 0;
+            if ([h uvcGetSelector:e->selector request:0x82 isPU:e->isPU out:&minVal size:e->size] == 0 &&
+                [h uvcGetSelector:e->selector request:0x83 isPU:e->isPU out:&maxVal size:e->size] == 0 &&
+                minVal < maxVal) {
+                int32_t res = 1;
+                [h uvcGetSelector:e->selector request:0x84 isPU:e->isPU out:&res size:e->size];
+                p->is_range = 1;
+                p->min      = (int)minVal;
+                p->max      = (int)maxVal;
+                p->step     = (res > 0) ? (int)res : 1;
+                count++;
+            }
+            // If no valid range is available, discard (don't increment count).
         }
     }
 
