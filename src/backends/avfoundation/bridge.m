@@ -273,19 +273,24 @@ static int uvc_set_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
     return (kr == kIOReturnSuccess) ? 0 : -1;
 }
 
-// Read a UVC GET_CUR value via the VideoControl interface object.
-static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
-                        uint8_t ifNum, void *data, uint16_t len) {
+// Generic UVC GET request (GET_CUR=0x81, GET_MIN=0x82, GET_MAX=0x83, GET_RES=0x84).
+static int uvc_get_req(IOUSBInterfaceInterface190 **intf, uint8_t request, uint8_t unitID,
+                        uint8_t selector, uint8_t ifNum, void *data, uint16_t len) {
     IOUSBDevRequest req;
     memset(&req, 0, sizeof(req));
     req.bmRequestType = USBmakebmRequestType(kUSBIn, kUSBClass, kUSBInterface);
-    req.bRequest      = 0x81; // GET_CUR
+    req.bRequest      = request;
     req.wValue        = (uint16_t)(selector << 8);
     req.wIndex        = (uint16_t)((unitID << 8) | ifNum);
     req.wLength       = len;
     req.pData         = data;
     IOReturn kr = (*intf)->ControlRequest(intf, 0, &req);
     return (kr == kIOReturnSuccess) ? 0 : -1;
+}
+
+static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_t selector,
+                        uint8_t ifNum, void *data, uint16_t len) {
+    return uvc_get_req(intf, 0x81, unitID, selector, ifNum, data, len);
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +310,9 @@ static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
                      ct:(uint8_t)ct;
 - (BOOL)uvcAvailable;
 - (BOOL)uvcHasCT;
+- (BOOL)uvcHasPU;
 - (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len;
+- (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len;
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value;
 @end
 
@@ -340,10 +347,16 @@ static int uvc_get_cur(IOUSBInterfaceInterface190 **intf, uint8_t unitID, uint8_
 
 - (BOOL)uvcAvailable { return _uvcIF != NULL; }
 - (BOOL)uvcHasCT     { return _uvcIF != NULL && _uvcCT != 0; }
+- (BOOL)uvcHasPU     { return _uvcIF != NULL && _uvcPU != 0; }
 
 - (int)uvcReadCTSelector:(uint8_t)selector intoBytes:(void *)buf len:(uint16_t)len {
     if (!_uvcIF || !_uvcCT) return -1;
     return uvc_get_cur(_uvcIF, _uvcCT, selector, _uvcVCIf, buf, len);
+}
+
+- (int)uvcGetPUSelector:(uint8_t)selector request:(uint8_t)req intoBytes:(void *)buf len:(uint16_t)len {
+    if (!_uvcIF || !_uvcPU) return -1;
+    return uvc_get_req(_uvcIF, req, _uvcPU, selector, _uvcVCIf, buf, len);
 }
 
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value {
@@ -801,6 +814,44 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
                 }
             }
         }
+
+        // white_balance fallback: CMIO often doesn't expose the temperature range on UVC
+        // cameras (especially when WB is in auto). Read CUR/MIN/MAX/RES via PU GET requests.
+        if ([h uvcHasPU] && count < capacity) {
+            BOOL hasWBTemp = NO, hasWBAuto = NO;
+            for (int i = 0; i < count; i++) {
+                if (strcmp(out[i].kind, "white_balance_temperature") == 0) hasWBTemp = YES;
+                if (strcmp(out[i].kind, "white_balance_auto")        == 0) hasWBAuto = YES;
+            }
+            if (!hasWBTemp) {
+                uint16_t cur = 0, min = 0, max = 0, res = 0;
+                if ([h uvcGetPUSelector:0x0A request:0x81 intoBytes:&cur len:2] == 0 &&
+                    [h uvcGetPUSelector:0x0A request:0x82 intoBytes:&min len:2] == 0 &&
+                    [h uvcGetPUSelector:0x0A request:0x83 intoBytes:&max len:2] == 0 &&
+                    min < max) {
+                    [h uvcGetPUSelector:0x0A request:0x84 intoBytes:&res len:2];
+                    WcParamDesc *p = &out[count++];
+                    memset(p, 0, sizeof(*p));
+                    strlcpy(p->kind, "white_balance_temperature", WC_MAX_KIND);
+                    p->current  = (int)(int16_t)OSSwapLittleToHostInt16(cur);
+                    p->is_range = 1;
+                    p->min      = (int)(int16_t)OSSwapLittleToHostInt16(min);
+                    p->max      = (int)(int16_t)OSSwapLittleToHostInt16(max);
+                    p->step     = (res > 0) ? (int)(int16_t)OSSwapLittleToHostInt16(res) : 1;
+                }
+            }
+            if (!hasWBAuto && count < capacity) {
+                uint8_t v = 0;
+                if ([h uvcGetPUSelector:0x0B request:0x81 intoBytes:&v len:1] == 0) {
+                    WcParamDesc *p = &out[count++];
+                    memset(p, 0, sizeof(*p));
+                    strlcpy(p->kind, "white_balance_auto", WC_MAX_KIND);
+                    p->current = (int)v;
+                    push_option(p, 0, "Manual");
+                    push_option(p, 1, "Auto");
+                }
+            }
+        }
     }
 
     return count;
@@ -823,6 +874,8 @@ int wc_set_parameter(void *handle, const char *kind, int value) {
             cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, value ? 1 : 0);
         } else if (strcmp(kind, "exposure_time_absolute") == 0) {
             cmio_set_auto_manual(cmioID, kCMIOExposureControlClassID, 0);
+        } else if (strcmp(kind, "white_balance_auto") == 0) {
+            cmio_set_auto_manual(cmioID, kCMIOTemperatureControlClassID, value ? 1 : 0);
         }
     }
 
