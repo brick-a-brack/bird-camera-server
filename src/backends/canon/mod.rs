@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -18,6 +19,7 @@ type EdsCameraListRef = EdsBaseRef;
 type EdsCameraRef = EdsBaseRef;
 type EdsStreamRef = EdsBaseRef;
 type EdsEvfImageRef = EdsBaseRef;
+type EdsDirectoryItemRef = EdsBaseRef;
 
 // kEdsPropID_Evf_OutputDevice
 const EDS_PROP_EVF_OUTPUT_DEVICE: u32 = 0x00000500;
@@ -26,6 +28,23 @@ const EDS_EVF_OUTPUT_DEVICE_PC: u32 = 2;
 
 // kEdsCameraCommand_ExtendShutDownTimer
 const CMD_EXTEND_SHUTDOWN_TIMER: u32 = 0x00000001;
+// kEdsCameraCommand_PressShutterButton
+const CMD_PRESS_SHUTTER: u32 = 0x00000004;
+// kEdsCameraCommand_ShutterButton_Completely / _OFF
+const SHUTTER_COMPLETELY: i32 = 0x00000003;
+const SHUTTER_OFF: i32 = 0x00000000;
+
+// kEdsObjectEvent_All / kEdsObjectEvent_DirItemRequestTransfer
+const OBJ_EVENT_ALL: u32 = 0x00000200;
+const OBJ_EVENT_DIR_ITEM_REQUEST_TRANSFER: u32 = 0x00000208;
+
+// kEdsPropID_SaveTo / kEdsSaveTo_Host
+const PROP_SAVE_TO: u32 = 0x0000000b;
+const SAVE_TO_HOST: u32 = 2;
+
+// Capture timeout
+const CAPTURE_TIMEOUT: Duration = Duration::from_secs(30);
+
 // Keep-alive interval: reset the sleep timer every 30 s for connected cameras.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
 
@@ -39,6 +58,24 @@ const PROP_TV:                   u32 = 0x00000406; // kEdsPropID_Tv
 const PROP_EXPOSURE_COMP:        u32 = 0x00000407; // kEdsPropID_ExposureCompensation
 const PROP_WHITE_BALANCE:        u32 = 0x00000106; // kEdsPropID_WhiteBalance
 const PROP_COLOR_TEMPERATURE:    u32 = 0x00000107; // kEdsPropID_ColorTemperature
+
+#[repr(C)]
+struct EdsDirectoryItemInfo {
+    size:       u64,
+    is_folder:  u32, // EdsBool
+    group_id:   u32,
+    option:     u32,
+    sz_file_name: [c_char; EDS_MAX_NAME],
+    format:     u32,
+    date_time:  u32,
+}
+
+#[repr(C)]
+struct EdsCapacity {
+    number_of_free_clusters: i32,
+    bytes_per_sector:        i32,
+    reset:                   u32, // EdsBool
+}
 
 #[repr(C)]
 struct EdsPropertyDesc {
@@ -101,6 +138,53 @@ extern "C" {
     ) -> u32;
     fn EdsRelease(in_ref: EdsBaseRef) -> u32;
     fn EdsGetEvent() -> u32;
+    fn EdsSetObjectEventHandler(
+        in_camera_ref: EdsCameraRef,
+        in_event: u32,
+        in_handler: Option<unsafe extern "C" fn(u32, EdsBaseRef, *mut std::ffi::c_void) -> u32>,
+        in_context: *mut std::ffi::c_void,
+    ) -> u32;
+    fn EdsGetDirectoryItemInfo(
+        in_dir_item_ref: EdsDirectoryItemRef,
+        out_dir_item_info: *mut EdsDirectoryItemInfo,
+    ) -> u32;
+    fn EdsDownload(
+        in_dir_item_ref: EdsDirectoryItemRef,
+        in_read_size: u64,
+        out_stream: EdsStreamRef,
+    ) -> u32;
+    fn EdsDownloadComplete(in_dir_item_ref: EdsDirectoryItemRef) -> u32;
+    fn EdsDownloadCancel(in_dir_item_ref: EdsDirectoryItemRef) -> u32;
+    fn EdsSetCapacity(in_camera_ref: EdsCameraRef, in_capacity: EdsCapacity) -> u32;
+}
+
+// ---------------------------------------------------------------------------
+// Object event callback
+// ---------------------------------------------------------------------------
+
+// Stores the EdsDirectoryItemRef received in the object event callback.
+// Only accessed on the canon-sdk thread.
+thread_local! {
+    static PENDING_DIR_ITEM: RefCell<Option<EdsDirectoryItemRef>> = RefCell::new(None);
+}
+
+/// Called by the EDSDK on the SDK thread when a camera object event fires.
+///
+/// On `kEdsObjectEvent_DirItemRequestTransfer` the camera is ready to transfer
+/// the newly shot image. We store the ref in a thread-local so the blocking
+/// capture loop can pick it up on the next tick.
+unsafe extern "C" fn object_event_callback(
+    event: u32,
+    object_ref: EdsBaseRef,
+    _context: *mut std::ffi::c_void,
+) -> u32 {
+    if event == OBJ_EVENT_DIR_ITEM_REQUEST_TRANSFER {
+        PENDING_DIR_ITEM.with(|p| *p.borrow_mut() = Some(object_ref));
+        // Do NOT release — the download will take ownership.
+    } else if !object_ref.is_null() {
+        EdsRelease(object_ref);
+    }
+    EDS_ERR_OK
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +220,10 @@ enum Command {
         prop_id: u32,
         value: i32,
         reply: mpsc::Sender<Result<(), CameraError>>,
+    },
+    CapturePhoto {
+        device_id: String,
+        reply: mpsc::Sender<Result<Vec<u8>, CameraError>>,
     },
     Shutdown,
 }
@@ -275,6 +363,19 @@ impl CameraBackend for CanonBackend {
             .recv()
             .unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
     }
+
+    fn capture_photo(&self, native_id: &str) -> Result<Vec<u8>, CameraError> {
+        let (reply_tx, reply_rx) = mpsc::channel();
+        self.tx
+            .send(Command::CapturePhoto {
+                device_id: native_id.to_string(),
+                reply: reply_tx,
+            })
+            .map_err(|_| CameraError::SdkError(0xFFFF_FFFF))?;
+        reply_rx
+            .recv()
+            .unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +429,9 @@ fn sdk_thread(rx: mpsc::Receiver<Command>, init_tx: mpsc::Sender<Result<(), Came
             }
             Ok(Command::SetParameter { device_id, prop_id, value, reply }) => {
                 let _ = reply.send(set_parameter_impl(&device_id, prop_id, value, &connected));
+            }
+            Ok(Command::CapturePhoto { device_id, reply }) => {
+                let _ = reply.send(capture_photo_impl(&device_id, &connected));
             }
             Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -484,6 +588,40 @@ fn connect_impl(
         return Err(CameraError::SdkError(err));
     }
 
+    // Direct captured photos to the host so that DirItemRequestTransfer fires.
+    let save_to: u32 = SAVE_TO_HOST;
+    unsafe {
+        EdsSetPropertyData(
+            camera_ref,
+            PROP_SAVE_TO,
+            0,
+            std::mem::size_of::<u32>() as u32,
+            &save_to as *const u32 as *const std::ffi::c_void,
+        )
+    };
+
+    // Inform the camera that the host has ample free space.
+    unsafe {
+        EdsSetCapacity(
+            camera_ref,
+            EdsCapacity {
+                number_of_free_clusters: 0x7FFF_FFFF,
+                bytes_per_sector: 512,
+                reset: 1,
+            },
+        )
+    };
+
+    // Register the object event handler so DirItemRequestTransfer reaches us.
+    unsafe {
+        EdsSetObjectEventHandler(
+            camera_ref,
+            OBJ_EVENT_ALL,
+            Some(object_event_callback),
+            std::ptr::null_mut(),
+        )
+    };
+
     connected.insert(device_id.to_string(), camera_ref);
     Ok(())
 }
@@ -637,6 +775,112 @@ fn get_parameters_impl(
     }
 
     Ok(result)
+}
+
+fn capture_photo_impl(
+    device_id: &str,
+    connected: &HashMap<String, EdsCameraRef>,
+) -> Result<Vec<u8>, CameraError> {
+    let camera_ref = connected
+        .get(device_id)
+        .copied()
+        .ok_or(CameraError::NotConnected)?;
+
+    // Discard any stale dir item from a previous capture.
+    PENDING_DIR_ITEM.with(|p| {
+        if let Some(stale) = p.borrow_mut().take() {
+            unsafe { EdsRelease(stale) };
+        }
+    });
+
+    // PressShutterButton Completely then OFF — more reliable than TakePicture
+    // on recent EOS bodies.
+    let err = unsafe { EdsSendCommand(camera_ref, CMD_PRESS_SHUTTER, SHUTTER_COMPLETELY) };
+    if err != EDS_ERR_OK {
+        return Err(CameraError::SdkError(err));
+    }
+    let err = unsafe { EdsSendCommand(camera_ref, CMD_PRESS_SHUTTER, SHUTTER_OFF) };
+    if err != EDS_ERR_OK {
+        return Err(CameraError::SdkError(err));
+    }
+
+    // Pump events until DirItemRequestTransfer arrives or timeout.
+    let deadline = std::time::Instant::now() + CAPTURE_TIMEOUT;
+    let dir_item = loop {
+        unsafe { EdsGetEvent() };
+
+        if let Some(item) = PENDING_DIR_ITEM.with(|p| p.borrow_mut().take()) {
+            break item;
+        }
+
+        if std::time::Instant::now() >= deadline {
+            return Err(CameraError::SdkError(0x000_0001)); // capture timeout
+        }
+
+        std::thread::sleep(Duration::from_millis(16));
+    };
+
+    download_dir_item(dir_item)
+}
+
+fn download_dir_item(dir_item: EdsDirectoryItemRef) -> Result<Vec<u8>, CameraError> {
+    // Read file metadata to get the size.
+    let mut info = EdsDirectoryItemInfo {
+        size: 0,
+        is_folder: 0,
+        group_id: 0,
+        option: 0,
+        sz_file_name: [0; EDS_MAX_NAME],
+        format: 0,
+        date_time: 0,
+    };
+    let err = unsafe { EdsGetDirectoryItemInfo(dir_item, &mut info) };
+    if err != EDS_ERR_OK {
+        unsafe { EdsRelease(dir_item) };
+        return Err(CameraError::SdkError(err));
+    }
+
+    // Create an in-memory stream.
+    let mut stream: EdsStreamRef = std::ptr::null_mut();
+    let err = unsafe { EdsCreateMemoryStream(0, &mut stream) };
+    if err != EDS_ERR_OK {
+        unsafe { EdsRelease(dir_item) };
+        return Err(CameraError::SdkError(err));
+    }
+
+    // Download the file into the stream.
+    let err = unsafe { EdsDownload(dir_item, info.size, stream) };
+    if err != EDS_ERR_OK {
+        unsafe {
+            EdsDownloadCancel(dir_item);
+            EdsRelease(stream);
+            EdsRelease(dir_item);
+        }
+        return Err(CameraError::SdkError(err));
+    }
+
+    // Signal transfer complete to the camera.
+    unsafe { EdsDownloadComplete(dir_item) };
+
+    // Read bytes from the stream buffer.
+    let mut ptr: *mut std::ffi::c_void = std::ptr::null_mut();
+    let mut length: u64 = 0;
+    unsafe {
+        EdsGetPointer(stream, &mut ptr);
+        EdsGetLength(stream, &mut length);
+    }
+
+    // SAFETY: ptr is valid until EdsRelease(stream).
+    let bytes = unsafe {
+        std::slice::from_raw_parts(ptr as *const u8, length as usize).to_vec()
+    };
+
+    unsafe {
+        EdsRelease(stream);
+        EdsRelease(dir_item);
+    }
+
+    Ok(bytes)
 }
 
 fn kind_to_prop_id(kind: &str) -> Option<u32> {

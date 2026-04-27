@@ -321,6 +321,65 @@ pub async fn set_parameter(
     }
 }
 
+pub async fn capture_photo(
+    State(backends): State<BackendState>,
+    Path(id): Path<String>,
+) -> Response {
+    let dev_id = match DeviceId::decode(&id) {
+        Ok(d) => d,
+        Err(_) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({ "error": "invalid device id" })),
+            )
+                .into_response()
+        }
+    };
+
+    let backend = match backends.get(&dev_id.backend) {
+        Some(b) => b.clone(),
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(json!({ "error": format!("unknown backend: {}", dev_id.backend) })),
+            )
+                .into_response()
+        }
+    };
+
+    let native_id = dev_id.native_id.clone();
+    let result = tokio::task::spawn_blocking(move || backend.capture_photo(&native_id)).await;
+
+    match result {
+        Ok(Ok(bytes)) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "image/jpeg")
+            .header(header::CONTENT_LENGTH, bytes.len())
+            .body(Body::from(bytes))
+            .unwrap(),
+        Ok(Err(CameraError::NotConnected)) => (
+            StatusCode::CONFLICT,
+            Json(json!({ "error": "device is not connected" })),
+        )
+            .into_response(),
+        Ok(Err(CameraError::NotSupported)) => (
+            StatusCode::METHOD_NOT_ALLOWED,
+            Json(json!({ "error": "photo capture not supported by this backend" })),
+        )
+            .into_response(),
+        Ok(Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+        Err(_) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": "internal error" })),
+        )
+            .into_response(),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

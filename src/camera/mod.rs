@@ -140,4 +140,12 @@ pub trait CameraBackend: Send + Sync {
     /// Sets a camera parameter by its type name and raw SDK value.
     /// The device must be connected before calling this.
     fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError>;
+
+    /// Captures a single photo and returns the raw image bytes (JPEG).
+    /// The device must be connected before calling this.
+    /// Backends that do not support photo capture return `Err(CameraError::NotSupported)`.
+    fn capture_photo(&self, native_id: &str) -> Result<Vec<u8>, CameraError> {
+        let _ = native_id;
+        Err(CameraError::NotSupported)
+    }
 }

@@ -90,6 +90,8 @@
     .btn-disconnect { background: #7f1d1d; color: #fca5a5; }
     .btn-liveview   { background: #1e3a5f; color: #93c5fd; }
     .btn-params     { background: #2d1f5e; color: #c4b5fd; }
+    .btn-capture    { background: #4a2000; color: #fdba74; }
+    .btn-capture.capturing { background: #78350f; color: #fde68a; }
     .btn:not(:disabled):hover { opacity: .8; }
 
     /* Collapsible panels */
@@ -262,6 +264,7 @@
           <button class="btn btn-connect"    onclick="connect('${cam.id}')">Connect</button>
           <button class="btn btn-disconnect" onclick="disconnect('${cam.id}')">Disconnect</button>
           <button class="btn btn-params"     onclick="toggleParams('${cam.id}')">Parameters</button>
+          <button class="btn btn-capture"    onclick="capturePhoto('${cam.id}', this)">Capture</button>
           <button class="btn btn-liveview"   onclick="toggleLiveView('${cam.id}')">Live view</button>
         </div>
         <div class="panel" id="params-panel-${cam.id}">
@@ -284,6 +287,7 @@
       const btnConnect = card.querySelector('.btn-connect');
       const btnDisconn = card.querySelector('.btn-disconnect');
       const btnParams  = card.querySelector('.btn-params');
+      const btnCapture = card.querySelector('.btn-capture');
       const btnLv      = card.querySelector('.btn-liveview');
 
       if (cam.connected) {
@@ -292,6 +296,7 @@
         btnConnect.disabled  = true;
         btnDisconn.disabled  = false;
         btnParams.disabled   = false;
+        btnCapture.disabled  = false;
         btnLv.disabled       = false;
       } else {
         badge.textContent    = 'Disconnected';
@@ -299,6 +304,7 @@
         btnConnect.disabled  = false;
         btnDisconn.disabled  = true;
         btnParams.disabled   = true;
+        btnCapture.disabled  = true;
         btnLv.disabled       = true;
         if (liveViews[cam.id])   stopLiveView(cam.id);
         if (paramPanels[cam.id]) closeParams(cam.id);
@@ -459,6 +465,40 @@
 
     function formatParamName(type) {
       return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // -------------------------------------------------------------------------
+    // Capture
+    // -------------------------------------------------------------------------
+
+    async function capturePhoto(id, btn) {
+      btn.disabled = true;
+      btn.classList.add('capturing');
+      btn.textContent = 'Capturing…';
+
+      try {
+        const res = await fetch(`/cameras/${id}/capture`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `capture-${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert(`Capture failed: ${e.message}`);
+      } finally {
+        btn.classList.remove('capturing');
+        btn.textContent = 'Capture';
+        btn.disabled    = false;
+      }
     }
 
     // -------------------------------------------------------------------------
