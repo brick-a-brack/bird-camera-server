@@ -27,11 +27,32 @@ jobs:
       - name: Install Rust targets
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
-      - name: Download Canon EDSDK
+      - name: Install Canon EDSDK
         run: |
-          mkdir -p external/EDSDK
+          # Download the outer zip (contains EDSDKv132010M/Macintosh/Macintosh.dmg)
           curl -fsSL "${{ env.CANON_EDSDK_MACOS_URL }}" -o canon_sdk.zip
-          unzip -q canon_sdk.zip -d external/EDSDK/
+          unzip -q canon_sdk.zip -d canon_sdk_tmp
+
+          # Locate the DMG inside the extracted tree (handle plain .dmg or .dmg.zip)
+          DMG=$(find canon_sdk_tmp -name "*.dmg" ! -name "*.dmg.zip" | head -1)
+          if [ -z "$DMG" ]; then
+            DMG_ZIP=$(find canon_sdk_tmp -name "*.dmg.zip" | head -1)
+            [ -z "$DMG_ZIP" ] && { echo "ERROR: no DMG found in SDK zip"; exit 1; }
+            unzip -q "$DMG_ZIP" -d canon_sdk_tmp/inner
+            DMG=$(find canon_sdk_tmp/inner -name "*.dmg" | head -1)
+          fi
+          [ -z "$DMG" ] && { echo "ERROR: could not extract DMG"; exit 1; }
+
+          # Mount the DMG
+          MOUNT_POINT=$(mktemp -d)
+          hdiutil attach "$DMG" -mountpoint "$MOUNT_POINT" -nobrowse -quiet
+
+          # Copy the framework using ditto to preserve symlinks and resource forks
+          mkdir -p external/EDSDK/EDSDKv132010M
+          ditto "$MOUNT_POINT/EDSDK/Framework/EDSDK.framework" \
+                external/EDSDK/EDSDKv132010M/EDSDK.framework
+
+          hdiutil detach "$MOUNT_POINT" -quiet
 
       - name: Build x86_64
         run: |
