@@ -91,8 +91,8 @@ jobs:
             cp -R "$FRAMEWORK_SRC" dist/toucan-camera-server-macos/
           fi
 
-          cd dist
-          zip -r toucan-camera-server-macos.zip toucan-camera-server-macos/*
+          cd dist/toucan-camera-server-macos
+          zip -r ../toucan-camera-server-macos.zip .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
