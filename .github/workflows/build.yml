@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - dev
   workflow_dispatch:
 
 jobs:
@@ -55,6 +56,7 @@ jobs:
         with:
           name: bird-camera-server-macos
           path: bird-camera-server-macos
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Windows — x86_64
@@ -89,12 +91,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: bird-camera-server-windows
-          path: target\x86_64-pc-windows-msvc\release\bird-camera-server.exe
+          path: target/x86_64-pc-windows-msvc/release/bird-camera-server.exe
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Attach to draft release
-  # Only runs on tag pushes. Checks if a draft release already exists for the
-  # tag — if so, uploads the built binaries to it. Does nothing otherwise.
+  # Attach to current draft release
+  # Runs on master/dev pushes. Finds the most recent draft release and uploads
+  # built binaries to it. Does nothing if no draft release exists.
   # ---------------------------------------------------------------------------
   release:
     name: Attach to draft release
@@ -115,24 +118,23 @@ jobs:
           name: bird-camera-server-windows
           path: dist/
 
-      - name: Attach assets to existing draft release
+      - name: Attach assets to current draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
         run: |
-          IS_DRAFT=$(gh release view "$TAG" \
+          DRAFT_TAG=$(gh release list \
             --repo "$GITHUB_REPOSITORY" \
-            --json isDraft \
-            --jq '.isDraft' \
-            2>/dev/null || echo "not_found")
+            --limit 100 \
+            --json tagName,isDraft,createdAt \
+            --jq 'map(select(.isDraft == true)) | sort_by(.createdAt) | last | .tagName // empty')
 
-          if [ "$IS_DRAFT" = "true" ]; then
-            echo "Draft release found for $TAG — uploading assets"
-            gh release upload "$TAG" \
+          if [ -n "$DRAFT_TAG" ]; then
+            echo "Draft release found ($DRAFT_TAG) — uploading assets"
+            gh release upload "$DRAFT_TAG" \
               dist/bird-camera-server-macos \
               dist/bird-camera-server.exe \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
           else
-            echo "No draft release found for tag $TAG — skipping upload (IS_DRAFT=$IS_DRAFT)"
+            echo "No draft release found — skipping upload"
           fi
