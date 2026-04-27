@@ -71,7 +71,7 @@ jobs:
           fi
 
           cd dist
-          zip -r toucan-camera-server-macos.zip toucan-camera-server-macos/
+          zip -r toucan-camera-server-macos.zip toucan-camera-server-macos/*
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
