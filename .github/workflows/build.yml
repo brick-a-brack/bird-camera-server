@@ -1,0 +1,139 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # macOS — Universal Binary (x86_64 + arm64)
+  # The Canon EDSDK.framework ships as a universal binary, so a single output
+  # binary works natively on both Intel and Apple Silicon Macs.
+  # ---------------------------------------------------------------------------
+  build-macos:
+    name: Build (macOS universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust targets
+        run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
+
+      # TODO: Install Canon EDSDK (macOS)
+      # The SDK is git-ignored and must be fetched from a private source.
+      # Place the framework at:
+      #   external/EDSDK/EDSDKv132010M/EDSDK.framework
+      # Example using a secret download URL:
+      #   curl -fsSL "${{ secrets.CANON_SDK_MACOS_URL }}" -o canon_sdk.zip
+      #   unzip -q canon_sdk.zip -d external/EDSDK/
+      - name: TODO — Install Canon EDSDK
+        run: echo "Canon SDK installation not yet configured — see TODO in workflow"
+
+      - name: Build x86_64
+        run: |
+          cargo build --release \
+            --target x86_64-apple-darwin \
+            --features backend-canon,backend-webcam-macos
+
+      - name: Build arm64
+        run: |
+          cargo build --release \
+            --target aarch64-apple-darwin \
+            --features backend-canon,backend-webcam-macos
+
+      - name: Create universal binary with lipo
+        run: |
+          lipo -create \
+            target/x86_64-apple-darwin/release/bird-camera-server \
+            target/aarch64-apple-darwin/release/bird-camera-server \
+            -output bird-camera-server-macos
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bird-camera-server-macos
+          path: bird-camera-server-macos
+
+  # ---------------------------------------------------------------------------
+  # Windows — x86_64
+  # Canon EDSDK only ships for x86_64 on Windows. ARM64 Windows users can run
+  # the x86_64 binary via the built-in x64 emulation layer.
+  # ---------------------------------------------------------------------------
+  build-windows:
+    name: Build (Windows x86_64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: Install Canon EDSDK (Windows)
+      # The SDK is git-ignored and must be fetched from a private source.
+      # Place the files at:
+      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Library/EDSDK.lib
+      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Dll/EDSDK.dll
+      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Dll/EdsImage.dll
+      # Example using a secret download URL:
+      #   Invoke-WebRequest -Uri "$env:CANON_SDK_WINDOWS_URL" -OutFile canon_sdk.zip
+      #   Expand-Archive canon_sdk.zip -DestinationPath external\EDSDK\
+      - name: TODO — Install Canon EDSDK
+        run: echo "Canon SDK installation not yet configured — see TODO in workflow"
+
+      - name: Build x86_64
+        run: |
+          cargo build --release `
+            --target x86_64-pc-windows-msvc `
+            --features backend-canon,backend-webcam-windows
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bird-camera-server-windows
+          path: target\x86_64-pc-windows-msvc\release\bird-camera-server.exe
+
+  # ---------------------------------------------------------------------------
+  # Attach to draft release
+  # Only runs on tag pushes. Checks if a draft release already exists for the
+  # tag — if so, uploads the built binaries to it. Does nothing otherwise.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Attach to draft release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bird-camera-server-macos
+          path: dist/
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: bird-camera-server-windows
+          path: dist/
+
+      - name: Attach assets to existing draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          IS_DRAFT=$(gh release view "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json isDraft \
+            --jq '.isDraft' \
+            2>/dev/null || echo "not_found")
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            echo "Draft release found for $TAG — uploading assets"
+            gh release upload "$TAG" \
+              dist/bird-camera-server-macos \
+              dist/bird-camera-server.exe \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            echo "No draft release found for tag $TAG — skipping upload (IS_DRAFT=$IS_DRAFT)"
+          fi
