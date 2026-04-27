@@ -36,13 +36,13 @@ jobs:
         run: |
           cargo build --release \
             --target x86_64-apple-darwin \
-            --features backend-webcam-macos
+            --features backend-webcam-macos,backend-canon
 
       - name: Build arm64
         run: |
           cargo build --release \
             --target aarch64-apple-darwin \
-            --features backend-webcam-macos
+            --features backend-webcam-macos,backend-canon
 
       - name: Create universal binary with lipo
         run: |
@@ -51,11 +51,32 @@ jobs:
             target/aarch64-apple-darwin/release/bird-camera-server \
             -output bird-camera-server-macos
 
+      - name: Package into zip
+        run: |
+          mkdir -p dist/bird-camera-server-macos
+
+          cp bird-camera-server-macos dist/bird-camera-server-macos/bird-camera-server
+
+          # Add a relative rpath so the binary finds EDSDK.framework next to itself
+          # when run outside the build tree.
+          install_name_tool \
+            -add_rpath @executable_path \
+            dist/bird-camera-server-macos/bird-camera-server
+
+          # Canon framework — only if present (SDK installed in CI)
+          FRAMEWORK_SRC="external/EDSDK/EDSDKv132010M/EDSDK.framework"
+          if [ -d "$FRAMEWORK_SRC" ]; then
+            cp -R "$FRAMEWORK_SRC" dist/bird-camera-server-macos/
+          fi
+
+          cd dist
+          zip -r bird-camera-server-macos.zip bird-camera-server-macos/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bird-camera-server-macos
-          path: bird-camera-server-macos
+          path: dist/bird-camera-server-macos.zip
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -85,13 +106,32 @@ jobs:
         run: |
           cargo build --release `
             --target x86_64-pc-windows-msvc `
-            --features backend-webcam-windows
+            --features backend-webcam-windows,backend-canon
+
+      - name: Package into zip
+        shell: pwsh
+        run: |
+          $out = "dist\bird-camera-server-windows"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+          Copy-Item "target\x86_64-pc-windows-msvc\release\bird-camera-server.exe" $out
+
+          # Canon DLLs — only if they were copied by build.rs (SDK present)
+          $dlls = @("EDSDK.dll", "EdsImage.dll")
+          foreach ($dll in $dlls) {
+            $src = "target\x86_64-pc-windows-msvc\release\$dll"
+            if (Test-Path $src) {
+              Copy-Item $src $out
+            }
+          }
+
+          Compress-Archive -Path "$out\*" -DestinationPath "dist\bird-camera-server-windows.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: bird-camera-server-windows
-          path: target/x86_64-pc-windows-msvc/release/bird-camera-server.exe
+          path: dist/bird-camera-server-windows.zip
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -131,8 +171,8 @@ jobs:
           if [ -n "$DRAFT_TAG" ]; then
             echo "Draft release found ($DRAFT_TAG) — uploading assets"
             gh release upload "$DRAFT_TAG" \
-              dist/bird-camera-server-macos \
-              dist/bird-camera-server.exe \
+              dist/bird-camera-server-macos.zip \
+              dist/bird-camera-server-windows.zip \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
           else
