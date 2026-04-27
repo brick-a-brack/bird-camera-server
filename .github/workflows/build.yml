@@ -29,6 +29,7 @@ jobs:
 
       - name: Download Canon EDSDK
         run: |
+          mkdir -p external/EDSDK
           curl -fsSL "${{ env.CANON_EDSDK_MACOS_URL }}" -o canon_sdk.zip
           unzip -q canon_sdk.zip -d external/EDSDK/
 
@@ -92,6 +93,7 @@ jobs:
 
       - name: Download Canon EDSDK
         run: |
+          New-Item -ItemType Directory -Force -Path external\EDSDK\ | Out-Null
           Invoke-WebRequest -Uri "$env:CANON_EDSDK_WINDOWS_URL" -OutFile canon_sdk.zip
           Expand-Archive canon_sdk.zip -DestinationPath external\EDSDK\
 
