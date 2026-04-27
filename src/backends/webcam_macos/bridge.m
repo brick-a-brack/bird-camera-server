@@ -633,7 +633,7 @@ void *wc_open_session(const char *unique_id) {
     if (!input) return NULL;
 
     dispatch_queue_t q =
-        dispatch_queue_create("bird.avfoundation.capture", DISPATCH_QUEUE_SERIAL);
+        dispatch_queue_create("toucan.avfoundation.capture", DISPATCH_QUEUE_SERIAL);
     WcFrameDelegate *delegate = [[WcFrameDelegate alloc] init];
 
     AVCaptureVideoDataOutput *output = [[AVCaptureVideoDataOutput alloc] init];

@@ -26,7 +26,7 @@ async fn index() -> Html<&'static str> {
 async fn health() -> Json<HealthCheck> {
     Json(HealthCheck {
         status: "ok",
-        service: "bird-camera-server",
+        service: "toucan-camera-server",
         version: env!("CARGO_PKG_VERSION"),
     })
 }

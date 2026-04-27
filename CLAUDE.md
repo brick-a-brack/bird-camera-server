@@ -1,4 +1,4 @@
-# Claude Rules for bird-camera-server
+# Claude Rules for toucan-camera-server
 
 ## Language
 - All code, comments, commit messages, variable names, and documentation must be in English.

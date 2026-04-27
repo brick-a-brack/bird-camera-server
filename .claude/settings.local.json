@@ -9,7 +9,7 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(unzip -q Macintosh.dmg.zip)",
       "Bash(hdiutil attach *)",
-      "Bash(cp -R /Volumes/Macintosh/EDSDK/Framework/EDSDK.framework /Users/mbaco/Documents/dev/brickabrack/bird-camera-server/external/EDSDK/EDSDKv132010M/)",
+      "Bash(cp -R /Volumes/Macintosh/EDSDK/Framework/EDSDK.framework /Users/mbaco/Documents/dev/brickabrack/toucan-camera-server/external/EDSDK/EDSDKv132010M/)",
       "Bash(hdiutil detach *)",
       "Bash(~/.cargo/bin/cargo build *)",
       "Bash(~/.cargo/bin/cargo run *)",

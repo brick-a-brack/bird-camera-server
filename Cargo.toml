@@ -1,5 +1,5 @@
 [package]
-name = "bird-camera-server"
+name = "toucan-camera-server"
 version = "0.1.0"
 edition = "2021"
 

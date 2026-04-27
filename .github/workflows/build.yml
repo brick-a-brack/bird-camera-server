@@ -47,36 +47,36 @@ jobs:
       - name: Create universal binary with lipo
         run: |
           lipo -create \
-            target/x86_64-apple-darwin/release/bird-camera-server \
-            target/aarch64-apple-darwin/release/bird-camera-server \
-            -output bird-camera-server-macos
+            target/x86_64-apple-darwin/release/toucan-camera-server \
+            target/aarch64-apple-darwin/release/toucan-camera-server \
+            -output toucan-camera-server-macos
 
       - name: Package into zip
         run: |
-          mkdir -p dist/bird-camera-server-macos
+          mkdir -p dist/toucan-camera-server-macos
 
-          cp bird-camera-server-macos dist/bird-camera-server-macos/bird-camera-server
+          cp toucan-camera-server-macos dist/toucan-camera-server-macos/toucan-camera-server
 
           # Add a relative rpath so the binary finds EDSDK.framework next to itself
           # when run outside the build tree.
           install_name_tool \
             -add_rpath @executable_path \
-            dist/bird-camera-server-macos/bird-camera-server
+            dist/toucan-camera-server-macos/toucan-camera-server
 
           # Canon framework — only if present (SDK installed in CI)
           FRAMEWORK_SRC="external/EDSDK/EDSDKv132010M/EDSDK.framework"
           if [ -d "$FRAMEWORK_SRC" ]; then
-            cp -R "$FRAMEWORK_SRC" dist/bird-camera-server-macos/
+            cp -R "$FRAMEWORK_SRC" dist/toucan-camera-server-macos/
           fi
 
           cd dist
-          zip -r bird-camera-server-macos.zip bird-camera-server-macos/
+          zip -r toucan-camera-server-macos.zip toucan-camera-server-macos/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bird-camera-server-macos
-          path: dist/bird-camera-server-macos.zip
+          name: toucan-camera-server-macos
+          path: dist/toucan-camera-server-macos.zip
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -104,10 +104,10 @@ jobs:
       - name: Package into zip
         shell: pwsh
         run: |
-          $out = "dist\bird-camera-server-windows"
+          $out = "dist\toucan-camera-server-windows"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          Copy-Item "target\x86_64-pc-windows-msvc\release\bird-camera-server.exe" $out
+          Copy-Item "target\x86_64-pc-windows-msvc\release\toucan-camera-server.exe" $out
 
           # Canon DLLs — only if they were copied by build.rs (SDK present)
           $dlls = @("EDSDK.dll", "EdsImage.dll")
@@ -118,13 +118,13 @@ jobs:
             }
           }
 
-          Compress-Archive -Path "$out\*" -DestinationPath "dist\bird-camera-server-windows.zip"
+          Compress-Archive -Path "$out\*" -DestinationPath "dist\toucan-camera-server-windows.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bird-camera-server-windows
-          path: dist/bird-camera-server-windows.zip
+          name: toucan-camera-server-windows
+          path: dist/toucan-camera-server-windows.zip
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
@@ -142,13 +142,13 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: bird-camera-server-macos
+          name: toucan-camera-server-macos
           path: dist/
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: bird-camera-server-windows
+          name: toucan-camera-server-windows
           path: dist/
 
       - name: Attach assets to current draft release
@@ -164,8 +164,8 @@ jobs:
           if [ -n "$DRAFT_TAG" ]; then
             echo "Draft release found ($DRAFT_TAG) — uploading assets"
             gh release upload "$DRAFT_TAG" \
-              dist/bird-camera-server-macos.zip \
-              dist/bird-camera-server-windows.zip \
+              dist/toucan-camera-server-macos.zip \
+              dist/toucan-camera-server-windows.zip \
               --repo "$GITHUB_REPOSITORY" \
               --clobber
           else
