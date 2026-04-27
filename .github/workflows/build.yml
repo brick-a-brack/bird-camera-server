@@ -29,7 +29,7 @@ jobs:
 
       - name: Download Canon EDSDK
         run: |
-          curl -fsSL "${{ env.CANON_SDK_MACOS_URL }}" -o canon_sdk.zip
+          curl -fsSL "${{ env.CANON_EDSDK_MACOS_URL }}" -o canon_sdk.zip
           unzip -q canon_sdk.zip -d external/EDSDK/
 
       - name: Build x86_64
