@@ -35,13 +35,13 @@ jobs:
         run: |
           cargo build --release \
             --target x86_64-apple-darwin \
-            --features backend-canon,backend-webcam-macos
+            --features backend-webcam-macos
 
       - name: Build arm64
         run: |
           cargo build --release \
             --target aarch64-apple-darwin \
-            --features backend-canon,backend-webcam-macos
+            --features backend-webcam-macos
 
       - name: Create universal binary with lipo
         run: |
@@ -83,7 +83,7 @@ jobs:
         run: |
           cargo build --release `
             --target x86_64-pc-windows-msvc `
-            --features backend-canon,backend-webcam-windows
+            --features backend-webcam-windows
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
