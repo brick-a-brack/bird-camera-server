@@ -7,6 +7,11 @@ on:
       - dev
   workflow_dispatch:
 
+env:
+  CANON_EDSDK_MACOS_URL: "https://uploads.brickfilms.com/files/1/29d5aec8-edsdkv132010m.zip"
+  CANON_EDSDK_WINDOWS_URL: "https://uploads.brickfilms.com/files/1/a3039b9f-edsdkv132010w.zip"
+  CANON_EDSDK_LINUX_URL: "https://uploads.brickfilms.com/files/1/a0d2f38c-edsdkv132010l.zip"
+
 jobs:
   # ---------------------------------------------------------------------------
   # macOS — Universal Binary (x86_64 + arm64)
@@ -22,15 +27,10 @@ jobs:
       - name: Install Rust targets
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
 
-      # TODO: Install Canon EDSDK (macOS)
-      # The SDK is git-ignored and must be fetched from a private source.
-      # Place the framework at:
-      #   external/EDSDK/EDSDKv132010M/EDSDK.framework
-      # Example using a secret download URL:
-      #   curl -fsSL "${{ secrets.CANON_SDK_MACOS_URL }}" -o canon_sdk.zip
-      #   unzip -q canon_sdk.zip -d external/EDSDK/
-      - name: TODO — Install Canon EDSDK
-        run: echo "Canon SDK installation not yet configured — see TODO in workflow"
+      - name: Download Canon EDSDK
+        run: |
+          curl -fsSL "${{ env.CANON_SDK_MACOS_URL }}" -o canon_sdk.zip
+          unzip -q canon_sdk.zip -d external/EDSDK/
 
       - name: Build x86_64
         run: |
@@ -90,17 +90,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # TODO: Install Canon EDSDK (Windows)
-      # The SDK is git-ignored and must be fetched from a private source.
-      # Place the files at:
-      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Library/EDSDK.lib
-      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Dll/EDSDK.dll
-      #   external/EDSDK/EDSDKv132010W/Windows/EDSDK_64/Dll/EdsImage.dll
-      # Example using a secret download URL:
-      #   Invoke-WebRequest -Uri "$env:CANON_SDK_WINDOWS_URL" -OutFile canon_sdk.zip
-      #   Expand-Archive canon_sdk.zip -DestinationPath external\EDSDK\
-      - name: TODO — Install Canon EDSDK
-        run: echo "Canon SDK installation not yet configured — see TODO in workflow"
+      - name: Download Canon EDSDK
+        run: |
+          Invoke-WebRequest -Uri "$env:CANON_EDSDK_WINDOWS_URL" -OutFile canon_sdk.zip
+          Expand-Archive canon_sdk.zip -DestinationPath external\EDSDK\
 
       - name: Build x86_64
         run: |
