@@ -26,11 +26,12 @@ Feel free to make pull-requests or report issues 😉
 
 | Backend                              | Windows | macOS | Linux |
 | ------------------------------------ | ------- | ----- | ----- |
-| Canon EOS (EDSDK)                    | 🟢      | 🟢    | 🟠    |
-| Nikon (Nikon SDKs)                   | 🟠      | 🟠    | 🔴    |
 | Webcams macOS (AVFoundation / IOKit) | 🔴      | 🟢    | 🔴    |
 | Webcams Windows (MediaFoundation)    | 🟢      | 🔴    | 🔴    |
 | Webcams Linux (V4L2)                 | 🔴      | 🔴    | 🟠    |
+| Canon EOS (EDSDK)                    | 🟢      | 🟢    | 🟠    |
+| Nikon (Nikon SDKs)                   | 🟠      | 🟠    | 🔴    |
+| Various cameras (libgphoto2)         | 🔴      | 🟠    | 🟠    |
 
 🟢 - Supported  
 🟠 - Planned  
