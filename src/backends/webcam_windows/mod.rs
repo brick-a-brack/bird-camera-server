@@ -617,9 +617,10 @@ fn get_parameters_impl(state: &DeviceState) -> Result<Vec<CameraParameter>, Came
             if caps & CameraControl_Flags_Auto.0 != 0 {
                 let is_auto = cur_flags & CameraControl_Flags_Auto.0 != 0;
                 let auto_kind = match kind {
-                    "focus"    => "focus_mode".to_string(),
-                    "exposure" => "exposure_mode".to_string(),
-                    _          => format!("{kind}_auto"),
+                    "focus"           => "focus_mode".to_string(),
+                    "exposure"        => "exposure_mode".to_string(),
+                    "white_balance"   => "white_balance_mode".to_string(),
+                    _                 => format!("{kind}_auto"),
                 };
                 params.push(CameraParameter {
                     kind: auto_kind,
@@ -669,6 +670,9 @@ fn set_parameter_impl(
     }
     if kind == "exposure_mode" {
         return set_auto_impl(state, "exposure", value != 0);
+    }
+    if kind == "white_balance_mode" {
+        return set_auto_impl(state, "white_balance", value != 0);
     }
     if let Some(base) = kind.strip_suffix("_auto") {
         return set_auto_impl(state, base, value != 0);

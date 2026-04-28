@@ -316,8 +316,8 @@ static const ControlDesc kControls[] = {
     { "saturation",                0x07, YES,  2, kCMIOSaturationControlClassID,            0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
     { "sharpness",                 0x08, YES,  2, kCMIOSharpnessControlClassID,             0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
     { "gamma",                     0x09, YES,  2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
-    { "white_balance_temperature", 0x0A, YES,  2, kCMIOTemperatureControlClassID,           0,                                CTRL_RANGE,            AVF_NONE,          "white_balance_auto"    },
-    { "white_balance_auto",        0x0B, YES,  1, 0,                                        kCMIOTemperatureControlClassID,   CTRL_BOOL_MANUAL_AUTO, AVF_WHITE_BALANCE, NULL                    },
+    { "white_balance_temperature", 0x0A, YES,  2, kCMIOTemperatureControlClassID,           0,                                CTRL_RANGE,            AVF_NONE,          "white_balance_mode"    },
+    { "white_balance_mode",        0x0B, YES,  1, 0,                                        kCMIOTemperatureControlClassID,   CTRL_BOOL_MANUAL_AUTO, AVF_WHITE_BALANCE, NULL                    },
     { "color_enable",              0x0C, YES,  1, 0,                                        0,                                CTRL_BOOL_OFF_ON,      AVF_NONE,          NULL                    },
     { "hue_auto",                  0x0F, YES,  1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_NONE,          NULL                    },
     // Camera Terminal controls

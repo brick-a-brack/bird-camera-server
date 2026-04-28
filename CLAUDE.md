@@ -140,7 +140,7 @@ GET  /cameras/{id}/liveview          — MJPEG stream (requires connected, retur
 | saturation | PU | 0x07 | 2 |
 | sharpness | PU | 0x08 | 2 |
 | white_balance_temperature | PU | 0x0A | 2 |
-| white_balance_auto | PU | 0x0B | 1 |
+| white_balance_mode | PU | 0x0B | 1 |
 | exposure_mode | CT | 0x02 | 1 (0→1=manual, 1→8=aperture priority) |
 | exposure_time_absolute | CT | 0x04 | 4 (100µs units) |
 | zoom_absolute | CT | 0x0B | 2 |
