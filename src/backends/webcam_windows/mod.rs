@@ -14,12 +14,12 @@ use windows::Win32::Media::DirectShow::{
 };
 use windows::Win32::Media::MediaFoundation::{
     IMFActivate, IMFAttributes, IMFMediaSource, IMFMediaType, IMFSample, IMFSourceReader,
-    MFCreateAttributes, MFCreateMediaType, MFCreateSourceReaderFromMediaSource,
+    MFCreateAttributes, MFCreateSourceReaderFromMediaSource,
     MFEnumDeviceSources, MFShutdown, MFStartup, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME,
     MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID,
-    MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_MT_FRAME_SIZE, MF_MT_MAJOR_TYPE,
-    MF_MT_SUBTYPE, MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-    MFMediaType_Video, MFVideoFormat_MJPG, MFVideoFormat_YUY2,
+    MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, MF_MT_FRAME_RATE, MF_MT_FRAME_SIZE,
+    MF_MT_SUBTYPE, MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING,
+    MF_SOURCE_READER_FIRST_VIDEO_STREAM, MFVideoFormat_MJPG, MFVideoFormat_YUY2,
 };
 use windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, CoUninitialize, COINIT_APARTMENTTHREADED};
 use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE};
@@ -78,17 +78,45 @@ enum Command {
 }
 
 // ---------------------------------------------------------------------------
+// Video format descriptors — enumerated once at connect time
+// ---------------------------------------------------------------------------
+
+struct VideoFormatInfo {
+    media_type: IMFMediaType,
+    is_mjpeg:   bool,
+    width:      u32,
+    height:     u32,
+    fps_num:    u32,
+    fps_den:    u32,
+}
+
+impl VideoFormatInfo {
+    fn label(&self) -> String {
+        let codec = if self.is_mjpeg { "MJPEG" } else { "YUV" };
+        let fps = if self.fps_den > 0 {
+            format!(" {:.0}fps", self.fps_num as f64 / self.fps_den as f64)
+        } else {
+            String::new()
+        };
+        format!("{}×{} {}{}", self.width, self.height, codec, fps)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Per-device state — lives exclusively on the SDK thread
 // ---------------------------------------------------------------------------
 
 struct DeviceState {
-    reader: IMFSourceReader,
-    source: IMFMediaSource,
-    video_proc_amp: Option<IAMVideoProcAmp>,
-    camera_control: Option<IAMCameraControl>,
+    reader:              IMFSourceReader,
+    source:              IMFMediaSource,
+    video_proc_amp:      Option<IAMVideoProcAmp>,
+    camera_control:      Option<IAMCameraControl>,
+    formats:             Vec<VideoFormatInfo>,
+    current_format_idx:  usize,
+    // Derived from formats[current_format_idx] for convenience:
     is_mjpeg: bool,
-    width: u32,
-    height: u32,
+    width:    u32,
+    height:   u32,
 }
 
 // ---------------------------------------------------------------------------
@@ -271,7 +299,7 @@ fn sdk_thread(rx: mpsc::Receiver<Command>, init_tx: mpsc::Sender<Result<(), Came
             }
             Ok(Command::SetParameter { native_id, kind, value, reply }) => {
                 let result = connected
-                    .get(&native_id)
+                    .get_mut(&native_id)
                     .ok_or(CameraError::NotConnected)
                     .and_then(|state| set_parameter_impl(state, &kind, value));
                 let _ = reply.send(result);
@@ -375,7 +403,16 @@ fn connect_impl(
         let reader: IMFSourceReader =
             MFCreateSourceReaderFromMediaSource(&source, &reader_attrs).map_err(win_err)?;
 
-        let (is_mjpeg, width, height) = select_video_format(&reader)?;
+        let formats = enumerate_video_formats(&reader);
+        if formats.is_empty() {
+            return Err(CameraError::SdkError(0xA102_0003)); // no usable formats
+        }
+        let best_idx = select_best_format_index(&formats);
+        let mt = &formats[best_idx].media_type;
+        reader.SetCurrentMediaType(video_stream(), None, mt).map_err(win_err)?;
+        let is_mjpeg = formats[best_idx].is_mjpeg;
+        let width    = formats[best_idx].width;
+        let height   = formats[best_idx].height;
 
         // Query optional control interfaces via QueryInterface on the source.
         let video_proc_amp = source.cast::<IAMVideoProcAmp>().ok();
@@ -383,7 +420,17 @@ fn connect_impl(
 
         connected.insert(
             native_id.to_string(),
-            DeviceState { reader, source, video_proc_amp, camera_control, is_mjpeg, width, height },
+            DeviceState {
+                reader,
+                source,
+                video_proc_amp,
+                camera_control,
+                formats,
+                current_format_idx: best_idx,
+                is_mjpeg,
+                width,
+                height,
+            },
         );
         Ok(())
     }
@@ -446,6 +493,24 @@ fn get_live_view_frame_impl(state: &DeviceState) -> Result<Vec<u8>, CameraError>
 
 fn get_parameters_impl(state: &DeviceState) -> Result<Vec<CameraParameter>, CameraError> {
     let mut params = Vec::new();
+
+    // Video format selection — lists all available MJPEG and YUV resolutions.
+    if state.formats.len() > 1 {
+        let options: Vec<ParameterOption> = state
+            .formats
+            .iter()
+            .enumerate()
+            .map(|(i, f)| ParameterOption { label: f.label(), value: i as i32 })
+            .collect();
+        params.push(CameraParameter {
+            kind:    "video_format".to_string(),
+            current: state.current_format_idx.to_string(),
+            options,
+            min:  None,
+            max:  None,
+            step: None,
+        });
+    }
 
     if let Some(vpa) = &state.video_proc_amp {
         // (property, api kind name)
@@ -570,10 +635,29 @@ fn get_parameters_impl(state: &DeviceState) -> Result<Vec<CameraParameter>, Came
 }
 
 fn set_parameter_impl(
-    state: &DeviceState,
+    state: &mut DeviceState,
     kind: &str,
     value: i32,
 ) -> Result<(), CameraError> {
+    // Format switch: apply the new native media type then flush the reader.
+    // The next ReadSample call will return frames in the new format seamlessly.
+    if kind == "video_format" {
+        let idx = value as usize;
+        let fmt = state.formats.get(idx).ok_or(CameraError::NotSupported)?;
+        unsafe {
+            state
+                .reader
+                .SetCurrentMediaType(video_stream(), None, &fmt.media_type)
+                .map_err(win_err)?;
+            let _ = state.reader.Flush(video_stream());
+        }
+        state.current_format_idx = idx;
+        state.is_mjpeg = fmt.is_mjpeg;
+        state.width    = fmt.width;
+        state.height   = fmt.height;
+        return Ok(());
+    }
+
     // Auto/manual toggle: kind ends with "_auto", value 0 = manual, 1 = auto.
     if let Some(base) = kind.strip_suffix("_auto") {
         return set_auto_impl(state, base, value != 0);
@@ -680,48 +764,60 @@ unsafe fn read_string_attr(attrs: &IMFAttributes, key: &GUID) -> Option<String> 
     s
 }
 
-/// Selects the best output video format for the source reader.
-///
-/// Priority: MJPEG (frames are already JPEG) → YUY2 (manual conversion via
-/// `yuyv_to_jpeg`) → YUY2 via MF video processing MFT.
-/// Returns `(is_mjpeg, width, height)`.
-unsafe fn select_video_format(reader: &IMFSourceReader) -> Result<(bool, u32, u32), CameraError> {
-    // Pass 1: look for a native MJPEG type.
+/// Enumerates all MJPEG and YUY2 native types for the first video stream.
+/// Deduplicates by (codec, width, height, fps).
+unsafe fn enumerate_video_formats(reader: &IMFSourceReader) -> Vec<VideoFormatInfo> {
+    let mut formats: Vec<VideoFormatInfo> = Vec::new();
     let mut index = 0u32;
     loop {
         let Ok(mt) = reader.GetNativeMediaType(video_stream(), index) else { break };
-        let subtype = mt.GetGUID(&MF_MT_SUBTYPE).unwrap_or(GUID::zeroed());
-        if subtype == MFVideoFormat_MJPG {
-            reader
-                .SetCurrentMediaType(video_stream(), None, &mt)
-                .map_err(win_err)?;
-            let (w, h) = frame_size(&mt);
-            return Ok((true, w, h));
-        }
         index += 1;
+
+        let subtype = mt.GetGUID(&MF_MT_SUBTYPE).unwrap_or(GUID::zeroed());
+        let is_mjpeg = subtype == MFVideoFormat_MJPG;
+        let is_yuv   = subtype == MFVideoFormat_YUY2;
+        if !is_mjpeg && !is_yuv {
+            continue;
+        }
+
+        let (width, height) = frame_size(&mt);
+        let fps_packed = mt.GetUINT64(&MF_MT_FRAME_RATE).unwrap_or(0);
+        let fps_num    = (fps_packed >> 32) as u32;
+        let fps_den    = (fps_packed & 0xFFFF_FFFF) as u32;
+
+        // Skip exact duplicates (same codec, resolution, fps).
+        let is_dup = formats.iter().any(|f| {
+            f.is_mjpeg == is_mjpeg
+                && f.width   == width
+                && f.height  == height
+                && f.fps_num == fps_num
+                && f.fps_den == fps_den
+        });
+        if !is_dup {
+            formats.push(VideoFormatInfo { media_type: mt, is_mjpeg, width, height, fps_num, fps_den });
+        }
     }
 
-    // Get dimensions from the first native type for the YUY2 fallback.
-    let first_mt = reader.GetNativeMediaType(video_stream(), 0).map_err(win_err)?;
-    let (w, h) = frame_size(&first_mt);
+    // Sort: resolution descending, then MJPEG before YUV, then fps descending.
+    formats.sort_by(|a, b| {
+        let res_a = a.width * a.height;
+        let res_b = b.width * b.height;
+        res_b.cmp(&res_a)
+            .then_with(|| b.is_mjpeg.cmp(&a.is_mjpeg))
+            .then_with(|| {
+                let fps_a = if a.fps_den > 0 { a.fps_num / a.fps_den } else { 0 };
+                let fps_b = if b.fps_den > 0 { b.fps_num / b.fps_den } else { 0 };
+                fps_b.cmp(&fps_a)
+            })
+    });
 
-    // Pass 2: request YUY2 output. MF inserts a video processor MFT if needed.
-    let yuy2_mt: IMFMediaType = MFCreateMediaType().map_err(win_err)?;
-    yuy2_mt.SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video).map_err(win_err)?;
-    yuy2_mt.SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_YUY2).map_err(win_err)?;
-    yuy2_mt
-        .SetUINT64(&MF_MT_FRAME_SIZE, ((w as u64) << 32) | h as u64)
-        .map_err(win_err)?;
+    formats
+}
 
-    if reader.SetCurrentMediaType(video_stream(), None, &yuy2_mt).is_ok() {
-        return Ok((false, w, h));
-    }
-
-    // Last resort: accept the first native format and attempt YUY2 interpretation.
-    reader
-        .SetCurrentMediaType(video_stream(), None, &first_mt)
-        .map_err(win_err)?;
-    Ok((false, w, h))
+/// Returns the index of the highest-resolution MJPEG format in an already-sorted
+/// list, falling back to index 0 (highest-res YUV) if no MJPEG is present.
+fn select_best_format_index(formats: &[VideoFormatInfo]) -> usize {
+    formats.iter().position(|f| f.is_mjpeg).unwrap_or(0)
 }
 
 /// Extracts (width, height) from an MF_MT_FRAME_SIZE attribute (width<<32 | height).
