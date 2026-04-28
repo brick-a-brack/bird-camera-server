@@ -408,13 +408,14 @@
             </div>
           </div>`;
       }
+      console.log(p)
       return `
         <div class="param-item">
           <div class="param-label">${name}</div>
           <div class="param-current">${escHtml(p.current)}</div>
           <select class="param-select" data-device-id="${escHtml(id)}" data-kind="${escHtml(p.type)}">
             ${p.options.map(o => `
-              <option value="${o.value}" ${o.label === p.current ? 'selected' : ''}>
+              <option value="${o.value}" ${o.value === p.current || `${o.value}` === `${p.current}` ? 'selected' : ''}>
                 ${escHtml(o.label)}
               </option>`).join('')}
           </select>
