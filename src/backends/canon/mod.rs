@@ -56,6 +56,7 @@ const PROP_AF_MODE:              u32 = 0x00000404; // kEdsPropID_AFMode
 const PROP_AV:                   u32 = 0x00000405; // kEdsPropID_Av
 const PROP_TV:                   u32 = 0x00000406; // kEdsPropID_Tv
 const PROP_EXPOSURE_COMP:        u32 = 0x00000407; // kEdsPropID_ExposureCompensation
+const PROP_IMAGE_QUALITY:        u32 = 0x00000100; // kEdsPropID_ImageQuality
 const PROP_WHITE_BALANCE:        u32 = 0x00000106; // kEdsPropID_WhiteBalance
 const PROP_COLOR_TEMPERATURE:    u32 = 0x00000107; // kEdsPropID_ColorTemperature
 
@@ -711,6 +712,7 @@ fn get_parameters_impl(
 
     // Each entry: (api name, property ID, decode fn)
     let specs: &[(&str, u32, fn(i32) -> String)] = &[
+        ("image_quality",        PROP_IMAGE_QUALITY, decode_image_quality),
         ("aperture",             PROP_AV,            decode_av),
         ("shutter_speed",        PROP_TV,            decode_tv),
         ("iso",                  PROP_ISO,           decode_iso),
@@ -885,6 +887,7 @@ fn download_dir_item(dir_item: EdsDirectoryItemRef) -> Result<Vec<u8>, CameraErr
 
 fn kind_to_prop_id(kind: &str) -> Option<u32> {
     match kind {
+        "image_quality"        => Some(PROP_IMAGE_QUALITY),
         "aperture"             => Some(PROP_AV),
         "shutter_speed"        => Some(PROP_TV),
         "iso"                  => Some(PROP_ISO),
@@ -1184,6 +1187,59 @@ fn decode_drive(code: i32) -> String {
         16 => "Silent continuous",
         17 => "Silent continuous low",
         _ => return format!("0x{code:02X}"),
+    };
+    label.to_string()
+}
+
+fn decode_image_quality(code: i32) -> String {
+    // Values from EdsImageQuality enum in EDSDKTypes.h.
+    // Format: <size> <compression> [+ RAW variant].
+    let label = match code as u32 {
+        // JPEG only
+        0x0010ff0f => "L JPEG",
+        0x0013ff0f => "L JPEG Fine",
+        0x0012ff0f => "L JPEG Normal",
+        0x0110ff0f => "M JPEG",
+        0x0113ff0f => "M JPEG Fine",
+        0x0112ff0f => "M JPEG Normal",
+        0x0510ff0f => "M1 JPEG",
+        0x0513ff0f => "M1 JPEG Fine",
+        0x0512ff0f => "M1 JPEG Normal",
+        0x0610ff0f => "M2 JPEG",
+        0x0613ff0f => "M2 JPEG Fine",
+        0x0612ff0f => "M2 JPEG Normal",
+        0x0210ff0f => "S JPEG",
+        0x0213ff0f => "S JPEG Fine",
+        0x0212ff0f => "S JPEG Normal",
+        0x0e10ff0f => "S1 JPEG",
+        0x0e13ff0f => "S1 JPEG Fine",
+        0x0e12ff0f => "S1 JPEG Normal",
+        0x0f10ff0f => "S2 JPEG",
+        0x0f13ff0f => "S2 JPEG Fine",
+        0x1013ff0f => "S3 JPEG Fine",
+        // RAW only
+        0x0064ff0f => "RAW",
+        0x0164ff0f => "MRAW",
+        0x0264ff0f => "SRAW",
+        // RAW + JPEG
+        0x00640013 => "RAW + L Fine",
+        0x00640012 => "RAW + L Normal",
+        0x00640113 => "RAW + M Fine",
+        0x00640112 => "RAW + M Normal",
+        0x00640213 => "RAW + S Fine",
+        0x00640212 => "RAW + S Normal",
+        0x00640010 => "RAW + L JPEG",
+        0x00640110 => "RAW + M JPEG",
+        0x00640210 => "RAW + S JPEG",
+        // MRAW + JPEG
+        0x01640013 => "MRAW + L Fine",
+        0x01640012 => "MRAW + L Normal",
+        0x01640010 => "MRAW + L JPEG",
+        // SRAW + JPEG
+        0x02640013 => "SRAW + L Fine",
+        0x02640012 => "SRAW + L Normal",
+        0x02640010 => "SRAW + L JPEG",
+        _ => return format!("{code:#010x}"),
     };
     label.to_string()
 }
