@@ -299,7 +299,7 @@ typedef struct {
     const char      *guarded_by;      // kind of the auto control that gates this one; NULL = always editable
 } ControlDesc;
 
-// exposure_auto uses a non-standard UVC value mapping:
+// exposure_mode uses a non-standard UVC value mapping:
 //   read : UVC 1 (manual) → logical 0, UVC 8 (aperture priority) → logical 1
 //   write: logical 0 → UVC 1, logical 1 → UVC 8
 // This is handled by name in uvcWriteKind:value: and in wc_get_parameters.
@@ -321,8 +321,8 @@ static const ControlDesc kControls[] = {
     { "color_enable",              0x0C, YES,  1, 0,                                        0,                                CTRL_BOOL_OFF_ON,      AVF_NONE,          NULL                    },
     { "hue_auto",                  0x0F, YES,  1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_NONE,          NULL                    },
     // Camera Terminal controls
-    { "exposure_auto",             0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE,      NULL                    },
-    { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              0,                                CTRL_RANGE,            AVF_NONE,          "exposure_auto"         },
+    { "exposure_mode",              0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE,      NULL                    },
+    { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              0,                                CTRL_RANGE,            AVF_NONE,          "exposure_mode"         },
     { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE,          "focus_mode"            },
     { "focus_mode",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS,         NULL                    },
     { "iris_absolute",             0x09, NO,   2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
@@ -352,7 +352,7 @@ static const int kControlCount = (int)(sizeof(kControls) / sizeof(kControls[0]))
 - (BOOL)uvcHasPU;
 // Read any UVC control value via GET_CUR / GET_MIN / GET_MAX / GET_RES.
 - (int)uvcGetSelector:(uint8_t)selector request:(uint8_t)req isPU:(BOOL)isPU out:(int32_t *)out size:(uint8_t)size;
-// Write a UVC control by kind name (handles exposure_auto AE-mode mapping internally).
+// Write a UVC control by kind name (handles exposure_mode AE-mode mapping internally).
 - (int)uvcWriteKind:(const char *)kind value:(int32_t)value;
 @end
 
@@ -409,8 +409,8 @@ static const int kControlCount = (int)(sizeof(kControls) / sizeof(kControls[0]))
 
     int32_t uvcVal = value;
 
-    // exposure_auto: logical 0 (manual) → UVC AE mode 1, logical 1 (auto) → UVC AE mode 8 (aperture priority).
-    if (strcmp(kind, "exposure_auto") == 0)
+    // exposure_mode: logical 0 (manual) → UVC AE mode 1, logical 1 (auto) → UVC AE mode 8 (aperture priority).
+    if (strcmp(kind, "exposure_mode") == 0)
         uvcVal = (value == 0) ? 1 : 8;
 
     uint8_t buf[4] = {0};
@@ -742,8 +742,8 @@ int wc_get_parameters(void *handle, WcParamDesc *out, int capacity) {
         else if (d->uvc_is_pu ? [h uvcHasPU] : [h uvcHasCT]) {
             int32_t cur = 0;
             if ([h uvcGetSelector:d->uvc_selector request:0x81 isPU:d->uvc_is_pu out:&cur size:d->uvc_size] == 0) {
-                // exposure_auto: UVC AE mode 1=manual → logical 0, otherwise → logical 1.
-                if (strcmp(d->kind, "exposure_auto") == 0)
+                // exposure_mode: UVC AE mode 1=manual → logical 0, otherwise → logical 1.
+                if (strcmp(d->kind, "exposure_mode") == 0)
                     cur = (cur == 1) ? 0 : 1;
                 p->current = (int)cur;
 
