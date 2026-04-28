@@ -323,8 +323,8 @@ static const ControlDesc kControls[] = {
     // Camera Terminal controls
     { "exposure_auto",             0x02, NO,   1, 0,                                        kCMIOExposureControlClassID,      CTRL_BOOL_MANUAL_AUTO, AVF_EXPOSURE,      NULL                    },
     { "exposure_time_absolute",    0x04, NO,   4, kCMIOExposureControlClassID,              0,                                CTRL_RANGE,            AVF_NONE,          "exposure_auto"         },
-    { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE,          "focus_auto"            },
-    { "focus_auto",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS,         NULL                    },
+    { "focus_absolute",            0x06, NO,   2, kCMIOFocusControlClassID,                 0,                                CTRL_RANGE,            AVF_NONE,          "focus_mode"            },
+    { "focus_mode",                0x08, NO,   1, 0,                                        0,                                CTRL_BOOL_MANUAL_AUTO, AVF_FOCUS,         NULL                    },
     { "iris_absolute",             0x09, NO,   2, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
     { "zoom_absolute",             0x0B, NO,   2, kCMIOZoomControlClassID,                  0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
     { "pan_absolute",              0x0D, NO,   4, 0,                                        0,                                CTRL_RANGE,            AVF_NONE,          NULL                    },
