@@ -5,7 +5,10 @@ use std::os::raw::c_char;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crate::camera::{CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo, ParameterOption};
+use crate::camera::{
+    CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo,
+    ParameterOption, ParameterType,
+};
 
 // ---------------------------------------------------------------------------
 // EDSDK types
@@ -56,6 +59,7 @@ const PROP_AF_MODE:              u32 = 0x00000404; // kEdsPropID_AFMode
 const PROP_AV:                   u32 = 0x00000405; // kEdsPropID_Av
 const PROP_TV:                   u32 = 0x00000406; // kEdsPropID_Tv
 const PROP_EXPOSURE_COMP:        u32 = 0x00000407; // kEdsPropID_ExposureCompensation
+const PROP_IMAGE_QUALITY:        u32 = 0x00000100; // kEdsPropID_ImageQuality
 const PROP_WHITE_BALANCE:        u32 = 0x00000106; // kEdsPropID_WhiteBalance
 const PROP_COLOR_TEMPERATURE:    u32 = 0x00000107; // kEdsPropID_ColorTemperature
 
@@ -218,7 +222,7 @@ enum Command {
     SetParameter {
         device_id: String,
         prop_id: u32,
-        value: i32,
+        value: i32, // already parsed from the string value at the trait boundary
         reply: mpsc::Sender<Result<(), CameraError>>,
     },
     CapturePhoto {
@@ -348,8 +352,14 @@ impl CameraBackend for CanonBackend {
             .unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
     }
 
-    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError> {
-        let prop_id = kind_to_prop_id(kind).ok_or(CameraError::NotSupported)?;
+    fn set_parameter(
+        &self,
+        native_id: &str,
+        param_type: ParameterType,
+        value: &str,
+    ) -> Result<(), CameraError> {
+        let prop_id = type_to_prop_id(param_type).ok_or(CameraError::NotSupported)?;
+        let value: i32 = value.parse().map_err(|_| CameraError::NotSupported)?;
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
             .send(Command::SetParameter {
@@ -709,69 +719,70 @@ fn get_parameters_impl(
         .copied()
         .ok_or(CameraError::NotConnected)?;
 
-    // Each entry: (api name, property ID, decode fn)
-    let specs: &[(&str, u32, fn(i32) -> String)] = &[
-        ("aperture",             PROP_AV,            decode_av),
-        ("shutter_speed",        PROP_TV,            decode_tv),
-        ("iso",                  PROP_ISO,           decode_iso),
-        ("white_balance",        PROP_WHITE_BALANCE, decode_wb),
-        ("color_temperature",    PROP_COLOR_TEMPERATURE, decode_color_temp),
-        ("metering_mode",        PROP_METERING_MODE, decode_metering),
-        ("af_mode",              PROP_AF_MODE,       decode_af),
-        ("drive_mode",           PROP_DRIVE_MODE,    decode_drive),
-        ("exposure_compensation",PROP_EXPOSURE_COMP, decode_ev),
+    // RangeSelect: ordered numeric progression (aperture, ISO, …).
+    // Select:      arbitrary discrete choices (WB, AF mode, …).
+    type Spec = (ParameterType, u32, fn(i32) -> String);
+
+    let range_select_specs: &[Spec] = &[
+        (ParameterType::Aperture,             PROP_AV,            decode_av),
+        (ParameterType::ShutterSpeed,         PROP_TV,            decode_tv),
+        (ParameterType::Iso,                  PROP_ISO,           decode_iso),
+        (ParameterType::ExposureCompensation, PROP_EXPOSURE_COMP, decode_ev),
+    ];
+
+    let select_specs: &[Spec] = &[
+        (ParameterType::ImageQuality,    PROP_IMAGE_QUALITY,     decode_image_quality),
+        (ParameterType::WhiteBalance,    PROP_WHITE_BALANCE,     decode_wb),
+        (ParameterType::ColorTemperature,PROP_COLOR_TEMPERATURE, decode_color_temp),
+        (ParameterType::MeteringMode,    PROP_METERING_MODE,     decode_metering),
+        (ParameterType::AfMode,          PROP_AF_MODE,           decode_af),
+        (ParameterType::DriveMode,       PROP_DRIVE_MODE,        decode_drive),
     ];
 
     let mut result = Vec::new();
 
-    for &(name, prop_id, decode) in specs {
-        let mut desc = EdsPropertyDesc {
-            form: 0,
-            access: 0,
-            num_elements: 0,
-            prop_desc: [0; 128],
-        };
+    for (specs, is_range_select) in [
+        (range_select_specs as &[Spec], true),
+        (select_specs        as &[Spec], false),
+    ] {
+        for &(param_type, prop_id, decode) in specs {
+            let mut desc = EdsPropertyDesc {
+                form: 0, access: 0, num_elements: 0, prop_desc: [0; 128],
+            };
 
-        let err = unsafe { EdsGetPropertyDesc(camera_ref, prop_id, &mut desc) };
+            let err = unsafe { EdsGetPropertyDesc(camera_ref, prop_id, &mut desc) };
+            if err != EDS_ERR_OK || desc.num_elements <= 0 || desc.access == 0 {
+                continue;
+            }
 
-        // Skip: SDK error, no options, or read-only (access == 0).
-        if err != EDS_ERR_OK || desc.num_elements <= 0 || desc.access == 0 {
-            continue;
+            let mut current_code: i32 = 0;
+            let err = unsafe {
+                EdsGetPropertyData(
+                    camera_ref, prop_id, 0,
+                    std::mem::size_of::<i32>() as u32,
+                    &mut current_code as *mut i32 as *mut std::ffi::c_void,
+                )
+            };
+            let current = if err == EDS_ERR_OK {
+                current_code.to_string()
+            } else {
+                "0".to_string()
+            };
+
+            let options = desc.prop_desc[..desc.num_elements as usize]
+                .iter()
+                .map(|&code| ParameterOption {
+                    label: decode(code),
+                    value: code.to_string(),
+                })
+                .collect();
+
+            result.push(if is_range_select {
+                CameraParameter::RangeSelect { param_type, current, options }
+            } else {
+                CameraParameter::Select { param_type, current, options }
+            });
         }
-
-        // Read current value.
-        let mut current_code: i32 = 0;
-        let err = unsafe {
-            EdsGetPropertyData(
-                camera_ref,
-                prop_id,
-                0,
-                std::mem::size_of::<i32>() as u32,
-                &mut current_code as *mut i32 as *mut std::ffi::c_void,
-            )
-        };
-        let current = if err == EDS_ERR_OK {
-            decode(current_code)
-        } else {
-            "Unknown".to_string()
-        };
-
-        let options = desc.prop_desc[..desc.num_elements as usize]
-            .iter()
-            .map(|&code| ParameterOption {
-                label: decode(code),
-                value: code,
-            })
-            .collect();
-
-        result.push(CameraParameter {
-            kind: name.to_string(),
-            current,
-            options,
-            min: None,
-            max: None,
-            step: None,
-        });
     }
 
     Ok(result)
@@ -883,17 +894,18 @@ fn download_dir_item(dir_item: EdsDirectoryItemRef) -> Result<Vec<u8>, CameraErr
     Ok(bytes)
 }
 
-fn kind_to_prop_id(kind: &str) -> Option<u32> {
-    match kind {
-        "aperture"             => Some(PROP_AV),
-        "shutter_speed"        => Some(PROP_TV),
-        "iso"                  => Some(PROP_ISO),
-        "white_balance"        => Some(PROP_WHITE_BALANCE),
-        "color_temperature"    => Some(PROP_COLOR_TEMPERATURE),
-        "metering_mode"        => Some(PROP_METERING_MODE),
-        "af_mode"              => Some(PROP_AF_MODE),
-        "drive_mode"           => Some(PROP_DRIVE_MODE),
-        "exposure_compensation"=> Some(PROP_EXPOSURE_COMP),
+fn type_to_prop_id(param_type: ParameterType) -> Option<u32> {
+    match param_type {
+        ParameterType::ImageQuality        => Some(PROP_IMAGE_QUALITY),
+        ParameterType::Aperture            => Some(PROP_AV),
+        ParameterType::ShutterSpeed        => Some(PROP_TV),
+        ParameterType::Iso                 => Some(PROP_ISO),
+        ParameterType::WhiteBalance        => Some(PROP_WHITE_BALANCE),
+        ParameterType::ColorTemperature    => Some(PROP_COLOR_TEMPERATURE),
+        ParameterType::MeteringMode        => Some(PROP_METERING_MODE),
+        ParameterType::AfMode              => Some(PROP_AF_MODE),
+        ParameterType::DriveMode           => Some(PROP_DRIVE_MODE),
+        ParameterType::ExposureCompensation=> Some(PROP_EXPOSURE_COMP),
         _ => None,
     }
 }
@@ -1184,6 +1196,52 @@ fn decode_drive(code: i32) -> String {
         16 => "Silent continuous",
         17 => "Silent continuous low",
         _ => return format!("0x{code:02X}"),
+    };
+    label.to_string()
+}
+
+fn decode_image_quality(code: i32) -> String {
+    let label = match code as u32 {
+        0x0010ff0f => "L JPEG",
+        0x0013ff0f => "L JPEG Fine",
+        0x0012ff0f => "L JPEG Normal",
+        0x0110ff0f => "M JPEG",
+        0x0113ff0f => "M JPEG Fine",
+        0x0112ff0f => "M JPEG Normal",
+        0x0510ff0f => "M1 JPEG",
+        0x0513ff0f => "M1 JPEG Fine",
+        0x0512ff0f => "M1 JPEG Normal",
+        0x0610ff0f => "M2 JPEG",
+        0x0613ff0f => "M2 JPEG Fine",
+        0x0612ff0f => "M2 JPEG Normal",
+        0x0210ff0f => "S JPEG",
+        0x0213ff0f => "S JPEG Fine",
+        0x0212ff0f => "S JPEG Normal",
+        0x0e10ff0f => "S1 JPEG",
+        0x0e13ff0f => "S1 JPEG Fine",
+        0x0e12ff0f => "S1 JPEG Normal",
+        0x0f10ff0f => "S2 JPEG",
+        0x0f13ff0f => "S2 JPEG Fine",
+        0x1013ff0f => "S3 JPEG Fine",
+        0x0064ff0f => "RAW",
+        0x0164ff0f => "MRAW",
+        0x0264ff0f => "SRAW",
+        0x00640013 => "RAW + L Fine",
+        0x00640012 => "RAW + L Normal",
+        0x00640113 => "RAW + M Fine",
+        0x00640112 => "RAW + M Normal",
+        0x00640213 => "RAW + S Fine",
+        0x00640212 => "RAW + S Normal",
+        0x00640010 => "RAW + L JPEG",
+        0x00640110 => "RAW + M JPEG",
+        0x00640210 => "RAW + S JPEG",
+        0x01640013 => "MRAW + L Fine",
+        0x01640012 => "MRAW + L Normal",
+        0x01640010 => "MRAW + L JPEG",
+        0x02640013 => "SRAW + L Fine",
+        0x02640012 => "SRAW + L Normal",
+        0x02640010 => "SRAW + L JPEG",
+        _ => return format!("{code:#010x}"),
     };
     label.to_string()
 }

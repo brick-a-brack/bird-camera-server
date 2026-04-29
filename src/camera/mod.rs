@@ -1,5 +1,5 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 // ---------------------------------------------------------------------------
@@ -44,6 +44,67 @@ impl DeviceId {
 }
 
 // ---------------------------------------------------------------------------
+// Parameter type — exhaustive list of all known parameter identifiers.
+// Adding a new parameter requires updating this enum and any backend that
+// exposes it. This prevents spelling mismatches between backends.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParameterType {
+    // --- Canon: image quality & capture ---
+    ImageQuality,
+    Aperture,
+    ShutterSpeed,
+    Iso,
+    ExposureCompensation,
+    MeteringMode,
+    AfMode,
+    DriveMode,
+
+    // --- Shared: white balance ---
+    WhiteBalance,
+    WhiteBalanceMode,  // auto / manual toggle
+    ColorTemperature,
+
+    // --- Shared: exposure ---
+    Exposure,
+    ExposureMode,      // auto / manual toggle
+
+    // --- Shared: focus & zoom ---
+    Focus,
+    FocusMode,         // auto / manual toggle
+    Zoom,
+
+    // --- Webcam: format ---
+    VideoFormat,
+
+    // --- Webcam: image adjustments ---
+    Brightness,
+    BrightnessMode,
+    Contrast,
+    ContrastMode,
+    Hue,
+    HueMode,
+    Saturation,
+    SaturationMode,
+    Sharpness,
+    Gamma,
+    BacklightCompensation,
+    Gain,
+    GainMode,
+    PowerLineFrequency,
+
+    // --- Webcam: camera geometry ---
+    Pan,
+    PanMode,
+    Tilt,
+    TiltMode,
+    Roll,
+    RollMode,
+}
+
+// ---------------------------------------------------------------------------
 // Shared types
 // ---------------------------------------------------------------------------
 
@@ -59,35 +120,50 @@ pub struct DeviceInfo {
     pub connected: bool,
 }
 
-/// One allowed value for a camera parameter.
+/// One option in a Select or RangeSelect parameter.
+/// `value` is the opaque string key passed back to `set_parameter`.
 #[derive(Debug, Clone, Serialize)]
 pub struct ParameterOption {
     /// Human-readable label (e.g. "f/5.6", "1/500", "ISO 400").
     pub label: String,
-    /// Raw SDK code to pass back when setting the parameter.
-    pub value: i32,
+    /// Opaque string key for identifying the option.
+    pub value: String,
 }
 
-/// A single settable camera parameter with its current value and allowed options.
+/// A camera parameter, discriminated by its representation kind.
 ///
-/// Discrete params (e.g. focus mode) set `options` and leave `min`/`max`/`step` as `None`.
-/// Range params (e.g. brightness, zoom) set `min`/`max`/`step` and leave `options` empty.
+/// - `range`        — continuous numeric value (slider); `current`, `min`, `max`, `step` are integers.
+/// - `select`       — arbitrary discrete choices; `current` matches one `option.value`.
+/// - `range_select` — ordered discrete values with numeric progression (ISO, aperture);
+///                    rendered as a select but values are semantically ordered.
 #[derive(Debug, Clone, Serialize)]
-pub struct CameraParameter {
-    /// Parameter identifier (e.g. "brightness", "zoom_absolute").
-    #[serde(rename = "type")]
-    pub kind: String,
-    /// Current value: label for discrete params, stringified integer for range params.
-    pub current: String,
-    /// Allowed values for discrete params; empty for range params.
-    pub options: Vec<ParameterOption>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub min: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub step: Option<i32>,
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CameraParameter {
+    Range {
+        #[serde(rename = "type")]
+        param_type: ParameterType,
+        current: i32,
+        min: i32,
+        max: i32,
+        step: i32,
+    },
+    Select {
+        #[serde(rename = "type")]
+        param_type: ParameterType,
+        current: String,
+        options: Vec<ParameterOption>,
+    },
+    RangeSelect {
+        #[serde(rename = "type")]
+        param_type: ParameterType,
+        current: String,
+        options: Vec<ParameterOption>,
+    },
 }
+
+// ---------------------------------------------------------------------------
+// Errors
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Error)]
 pub enum CameraError {
@@ -137,13 +213,19 @@ pub trait CameraBackend: Send + Sync {
     /// The device must be connected before calling this.
     fn get_live_view_frame(&self, native_id: &str) -> Result<Vec<u8>, CameraError>;
 
-    /// Sets a camera parameter by its type name and raw SDK value.
-    /// The device must be connected before calling this.
-    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError>;
+    /// Sets a parameter by its type and value.
+    ///
+    /// `value` is always a string:
+    /// - Range params:              stringified integer (e.g. `"42"`)
+    /// - Select / RangeSelect:      opaque key from `ParameterOption.value` (e.g. `"77"`)
+    /// - Mode (auto/manual) params: `"1"` = auto, `"0"` = manual
+    fn set_parameter(
+        &self,
+        native_id: &str,
+        param_type: ParameterType,
+        value: &str,
+    ) -> Result<(), CameraError>;
 
-    /// Captures a single photo and returns the raw image bytes (JPEG).
-    /// The device must be connected before calling this.
-    /// Backends that do not support photo capture return `Err(CameraError::NotSupported)`.
     fn capture_photo(&self, native_id: &str) -> Result<Vec<u8>, CameraError> {
         let _ = native_id;
         Err(CameraError::NotSupported)

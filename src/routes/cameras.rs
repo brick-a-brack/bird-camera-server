@@ -16,7 +16,7 @@ use tokio_stream::StreamExt;
 
 use serde::Deserialize;
 
-use crate::camera::{CameraBackend, CameraError, DeviceId, DeviceInfo};
+use crate::camera::{CameraBackend, CameraError, DeviceId, DeviceInfo, ParameterType};
 
 // ---------------------------------------------------------------------------
 // State types
@@ -259,8 +259,9 @@ pub async fn live_view(State(state): State<AppState>, Path(id): Path<String>) ->
 #[derive(Deserialize)]
 pub struct SetParameterBody {
     #[serde(rename = "type")]
-    kind: String,
-    value: i32,
+    param_type: ParameterType,
+    /// Always a string. Range params: stringified integer. Select / RangeSelect: opaque key.
+    value: String,
 }
 
 pub async fn set_parameter(
@@ -292,7 +293,7 @@ pub async fn set_parameter(
 
     let native_id = dev_id.native_id.clone();
     let result = tokio::task::spawn_blocking(move || {
-        backend.set_parameter(&native_id, &body.kind, body.value)
+        backend.set_parameter(&native_id, body.param_type, &body.value)
     })
     .await;
 

@@ -21,15 +21,46 @@ use windows::Win32::Media::MediaFoundation::{
     MF_MT_SUBTYPE, MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING,
     MF_SOURCE_READER_FIRST_VIDEO_STREAM, MFVideoFormat_MJPG, MFVideoFormat_YUY2,
 };
+use windows::Win32::Media::KernelStreaming::IKsControl;
 use windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, CoUninitialize, COINIT_APARTMENTTHREADED};
 use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, PeekMessageW, TranslateMessage, MSG, PM_REMOVE};
 
 use crate::camera::{
-    CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo, ParameterOption,
+    CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo,
+    ParameterOption, ParameterType,
 };
 
 // MF_VERSION = (MF_SDK_VERSION << 16 | MF_API_VERSION) = (0x0002 << 16 | 0x0070)
 const MF_SDK_VERSION_VALUE: u32 = 0x0002_0070;
+
+// Power line frequency accessed via IKsControl on PROPSETID_VIDCAP_VIDEOPROCAMP.
+// IAMVideoProcAmp only exposes IDs 0–9; ID 20 must go through the KS layer directly.
+const PROPSETID_VIDCAP_VIDEOPROCAMP: GUID = GUID {
+    data1: 0xC6E1_3360,
+    data2: 0x30AC,
+    data3: 0x11D0,
+    data4: [0xA1, 0x8C, 0x00, 0xA0, 0xC9, 0x11, 0x89, 0x56],
+};
+const KSPROP_VIDPROCAMP_POWERLINE: u32 = 20;
+const KSPROPERTY_TYPE_GET: u32 = 0x0000_0001;
+const KSPROPERTY_TYPE_SET: u32 = 0x0000_0002;
+
+// Plain struct that matches the KSPROPERTY memory layout (GUID + u32 + u32 = 24 bytes).
+// Used as the "Property" argument to IKsControl::KsProperty via raw-pointer cast.
+#[repr(C)]
+struct KsPropId {
+    set:   GUID,
+    id:    u32,
+    flags: u32,
+}
+
+// Value data for PROPSETID_VIDCAP_VIDEOPROCAMP properties (12 bytes, follows the KsPropId header).
+#[repr(C)]
+struct KsVideoProcAmpValue {
+    value:        i32,
+    flags:        u32, // 1 = auto, 2 = manual
+    capabilities: u32,
+}
 
 // IMFSourceReader stream-flags (MFSTREAMSINK_MARKER_FLAG)
 const MF_SOURCE_READERF_ERROR: u32 = 0x0001;
@@ -70,8 +101,8 @@ enum Command {
     },
     SetParameter {
         native_id: String,
-        kind: String,
-        value: i32,
+        param_type: ParameterType,
+        value: String,
         reply: mpsc::Sender<Result<(), CameraError>>,
     },
     Shutdown,
@@ -111,6 +142,7 @@ struct DeviceState {
     source:              IMFMediaSource,
     video_proc_amp:      Option<IAMVideoProcAmp>,
     camera_control:      Option<IAMCameraControl>,
+    ks_control:     Option<IKsControl>,
     formats:             Vec<VideoFormatInfo>,
     current_format_idx:  usize,
     // Derived from formats[current_format_idx] for convenience:
@@ -218,13 +250,18 @@ impl CameraBackend for WebcamWindowsBackend {
         reply_rx.recv().unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
     }
 
-    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError> {
+    fn set_parameter(
+        &self,
+        native_id: &str,
+        param_type: ParameterType,
+        value: &str,
+    ) -> Result<(), CameraError> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
             .send(Command::SetParameter {
                 native_id: native_id.to_string(),
-                kind: kind.to_string(),
-                value,
+                param_type,
+                value: value.to_string(),
                 reply: reply_tx,
             })
             .map_err(|_| CameraError::SdkError(0xFFFF_FFFF))?;
@@ -297,11 +334,11 @@ fn sdk_thread(rx: mpsc::Receiver<Command>, init_tx: mpsc::Sender<Result<(), Came
                     .and_then(get_live_view_frame_impl);
                 let _ = reply.send(result);
             }
-            Ok(Command::SetParameter { native_id, kind, value, reply }) => {
+            Ok(Command::SetParameter { native_id, param_type, value, reply }) => {
                 let result = connected
                     .get_mut(&native_id)
                     .ok_or(CameraError::NotConnected)
-                    .and_then(|state| set_parameter_impl(state, &kind, value));
+                    .and_then(|state| set_parameter_impl(state, param_type, &value));
                 let _ = reply.send(result);
             }
             Ok(Command::Shutdown) => break,
@@ -415,8 +452,9 @@ fn connect_impl(
         let height   = formats[best_idx].height;
 
         // Query optional control interfaces via QueryInterface on the source.
-        let video_proc_amp = source.cast::<IAMVideoProcAmp>().ok();
-        let camera_control = source.cast::<IAMCameraControl>().ok();
+        let video_proc_amp  = source.cast::<IAMVideoProcAmp>().ok();
+        let camera_control  = source.cast::<IAMCameraControl>().ok();
+        let ks_control = source.cast::<IKsControl>().ok();
 
         connected.insert(
             native_id.to_string(),
@@ -425,6 +463,7 @@ fn connect_impl(
                 source,
                 video_proc_amp,
                 camera_control,
+                ks_control,
                 formats,
                 current_format_idx: best_idx,
                 is_mjpeg,
@@ -494,146 +533,142 @@ fn get_live_view_frame_impl(state: &DeviceState) -> Result<Vec<u8>, CameraError>
 fn get_parameters_impl(state: &DeviceState) -> Result<Vec<CameraParameter>, CameraError> {
     let mut params = Vec::new();
 
-    // Video format selection — lists all available MJPEG and YUV resolutions.
+    // Video format selection.
     if state.formats.len() > 1 {
         let options: Vec<ParameterOption> = state
             .formats
             .iter()
             .enumerate()
-            .map(|(i, f)| ParameterOption { label: f.label(), value: i as i32 })
+            .map(|(i, f)| ParameterOption { label: f.label(), value: i.to_string() })
             .collect();
-        params.push(CameraParameter {
-            kind:    "video_format".to_string(),
-            current: state.current_format_idx.to_string(),
+        params.push(CameraParameter::Select {
+            param_type: ParameterType::VideoFormat,
+            current:    state.current_format_idx.to_string(),
             options,
-            min:  None,
-            max:  None,
-            step: None,
         });
     }
 
+    let mode_options = || vec![
+        ParameterOption { label: "manual".to_string(), value: "0".to_string() },
+        ParameterOption { label: "auto".to_string(),   value: "1".to_string() },
+    ];
+
     if let Some(vpa) = &state.video_proc_amp {
-        // (property, api kind name)
-        let specs: &[(VideoProcAmpProperty, &str)] = &[
-            (VideoProcAmp_Brightness, "brightness"),
-            (VideoProcAmp_Contrast, "contrast"),
-            (VideoProcAmp_Hue, "hue"),
-            (VideoProcAmp_Saturation, "saturation"),
-            (VideoProcAmp_Sharpness, "sharpness"),
-            (VideoProcAmp_Gamma, "gamma"),
-            (VideoProcAmp_WhiteBalance, "white_balance"),
-            (VideoProcAmp_BacklightCompensation, "backlight_compensation"),
-            (VideoProcAmp_Gain, "gain"),
+        let specs: &[(VideoProcAmpProperty, ParameterType, Option<ParameterType>)] = &[
+            (VideoProcAmp_Brightness,           ParameterType::Brightness,           Some(ParameterType::BrightnessMode)),
+            (VideoProcAmp_Contrast,             ParameterType::Contrast,             Some(ParameterType::ContrastMode)),
+            (VideoProcAmp_Hue,                  ParameterType::Hue,                  Some(ParameterType::HueMode)),
+            (VideoProcAmp_Saturation,           ParameterType::Saturation,           Some(ParameterType::SaturationMode)),
+            (VideoProcAmp_Sharpness,            ParameterType::Sharpness,            None),
+            (VideoProcAmp_Gamma,                ParameterType::Gamma,                None),
+            (VideoProcAmp_WhiteBalance,         ParameterType::WhiteBalance,         Some(ParameterType::WhiteBalanceMode)),
+            (VideoProcAmp_BacklightCompensation,ParameterType::BacklightCompensation,None),
+            (VideoProcAmp_Gain,                 ParameterType::Gain,                 Some(ParameterType::GainMode)),
         ];
 
-        for &(prop, kind) in specs {
-            let mut min = 0i32;
-            let mut max = 0i32;
-            let mut step = 0i32;
-            let mut default = 0i32;
-            let mut caps = 0i32;
-
-            if unsafe { vpa.GetRange(prop.0, &mut min, &mut max, &mut step, &mut default, &mut caps) }
-                .is_err()
-            {
+        for &(prop, param_type, mode_type) in specs {
+            let mut min = 0i32; let mut max = 0i32;
+            let mut step = 0i32; let mut default = 0i32; let mut caps = 0i32;
+            if unsafe { vpa.GetRange(prop.0, &mut min, &mut max, &mut step, &mut default, &mut caps) }.is_err() {
                 continue;
             }
-
-            let mut cur_value = 0i32;
-            let mut cur_flags = 0i32;
+            let mut cur_value = 0i32; let mut cur_flags = 0i32;
             let current = if unsafe { vpa.Get(prop.0, &mut cur_value, &mut cur_flags) }.is_ok() {
                 cur_value
-            } else {
-                default
-            };
+            } else { default };
 
-            params.push(CameraParameter {
-                kind: kind.to_string(),
-                current: current.to_string(),
-                options: vec![],
-                min: Some(min),
-                max: Some(max),
-                step: Some(step),
-            });
+            let is_auto = mode_type.is_some()
+                && caps & VideoProcAmp_Flags_Auto.0 != 0
+                && cur_flags & VideoProcAmp_Flags_Auto.0 != 0;
 
-            // Expose an auto/manual toggle when the device supports automatic mode.
-            if caps & VideoProcAmp_Flags_Auto.0 != 0 {
-                let is_auto = cur_flags & VideoProcAmp_Flags_Auto.0 != 0;
-                params.push(CameraParameter {
-                    kind: format!("{kind}_auto"),
-                    current: if is_auto { "1" } else { "0" }.to_string(),
-                    options: vec![
-                        ParameterOption { label: "manual".to_string(), value: 0 },
-                        ParameterOption { label: "auto".to_string(), value: 1 },
-                    ],
-                    min: None,
-                    max: None,
-                    step: None,
-                });
+            // Only expose the value param when in manual mode (or when there is no mode).
+            if !is_auto {
+                params.push(CameraParameter::Range { param_type, current, min, max, step });
+            }
+
+            if let Some(mode_param_type) = mode_type {
+                if caps & VideoProcAmp_Flags_Auto.0 != 0 {
+                    params.push(CameraParameter::Select {
+                        param_type: mode_param_type,
+                        current:    if is_auto { "1" } else { "0" }.to_string(),
+                        options:    mode_options(),
+                    });
+                }
             }
         }
     }
 
     if let Some(cc) = &state.camera_control {
-        let specs: &[(CameraControlProperty, &str)] = &[
-            (CameraControl_Pan, "pan"),
-            (CameraControl_Tilt, "tilt"),
-            (CameraControl_Roll, "roll"),
-            (CameraControl_Zoom, "zoom"),
-            (CameraControl_Exposure, "exposure"),
-            (CameraControl_Focus, "focus"),
+        let specs: &[(CameraControlProperty, ParameterType, Option<ParameterType>)] = &[
+            (CameraControl_Pan,      ParameterType::Pan,      Some(ParameterType::PanMode)),
+            (CameraControl_Tilt,     ParameterType::Tilt,     Some(ParameterType::TiltMode)),
+            (CameraControl_Roll,     ParameterType::Roll,     Some(ParameterType::RollMode)),
+            (CameraControl_Zoom,     ParameterType::Zoom,     None),
+            (CameraControl_Exposure, ParameterType::Exposure, Some(ParameterType::ExposureMode)),
+            (CameraControl_Focus,    ParameterType::Focus,    Some(ParameterType::FocusMode)),
         ];
 
-        for &(prop, kind) in specs {
-            let mut min = 0i32;
-            let mut max = 0i32;
-            let mut step = 0i32;
-            let mut default = 0i32;
-            let mut caps = 0i32;
-
-            if unsafe { cc.GetRange(prop.0, &mut min, &mut max, &mut step, &mut default, &mut caps) }
-                .is_err()
-            {
+        for &(prop, param_type, mode_type) in specs {
+            let mut min = 0i32; let mut max = 0i32;
+            let mut step = 0i32; let mut default = 0i32; let mut caps = 0i32;
+            if unsafe { cc.GetRange(prop.0, &mut min, &mut max, &mut step, &mut default, &mut caps) }.is_err() {
                 continue;
             }
-
-            let mut cur_value = 0i32;
-            let mut cur_flags = 0i32;
+            let mut cur_value = 0i32; let mut cur_flags = 0i32;
             let current = if unsafe { cc.Get(prop.0, &mut cur_value, &mut cur_flags) }.is_ok() {
                 cur_value
-            } else {
-                default
-            };
+            } else { default };
 
-            params.push(CameraParameter {
-                kind: kind.to_string(),
-                current: current.to_string(),
-                options: vec![],
-                min: Some(min),
-                max: Some(max),
-                step: Some(step),
-            });
+            let is_auto = mode_type.is_some()
+                && caps & CameraControl_Flags_Auto.0 != 0
+                && cur_flags & CameraControl_Flags_Auto.0 != 0;
 
-            if caps & CameraControl_Flags_Auto.0 != 0 {
-                let is_auto = cur_flags & CameraControl_Flags_Auto.0 != 0;
-                let auto_kind = match kind {
-                    "focus"           => "focus_mode".to_string(),
-                    "exposure"        => "exposure_mode".to_string(),
-                    "white_balance"   => "white_balance_mode".to_string(),
-                    _                 => format!("{kind}_auto"),
-                };
-                params.push(CameraParameter {
-                    kind: auto_kind,
-                    current: if is_auto { "1" } else { "0" }.to_string(),
-                    options: vec![
-                        ParameterOption { label: "manual".to_string(), value: 0 },
-                        ParameterOption { label: "auto".to_string(), value: 1 },
-                    ],
-                    min: None,
-                    max: None,
-                    step: None,
-                });
+            // Only expose the value param when in manual mode (or when there is no mode).
+            if !is_auto {
+                params.push(CameraParameter::Range { param_type, current, min, max, step });
             }
+
+            if let Some(mode_param_type) = mode_type {
+                if caps & CameraControl_Flags_Auto.0 != 0 {
+                    params.push(CameraParameter::Select {
+                        param_type: mode_param_type,
+                        current:    if is_auto { "1" } else { "0" }.to_string(),
+                        options:    mode_options(),
+                    });
+                }
+            }
+        }
+    }
+
+    // Power line frequency (anti-flicker) via IKsControl::KsProperty.
+    // IAMVideoProcAmp only covers IDs 0–9; ID 20 requires the KS layer directly.
+    if let Some(ks) = &state.ks_control {
+        let prop = KsPropId {
+            set:   PROPSETID_VIDCAP_VIDEOPROCAMP,
+            id:    KSPROP_VIDPROCAMP_POWERLINE,
+            flags: KSPROPERTY_TYPE_GET,
+        };
+        let mut data = KsVideoProcAmpValue { value: 0, flags: 0, capabilities: 0 };
+        let mut bytes_returned = 0u32;
+        if unsafe {
+            ks.KsProperty(
+                &prop as *const KsPropId as *const _,
+                std::mem::size_of::<KsPropId>() as u32,
+                &mut data as *mut _ as *mut core::ffi::c_void,
+                std::mem::size_of::<KsVideoProcAmpValue>() as u32,
+                &mut bytes_returned,
+            )
+        }.is_ok() {
+            let options = vec![
+                ParameterOption { label: "Disabled".to_string(), value: "0".to_string() },
+                ParameterOption { label: "50 Hz".to_string(),   value: "1".to_string() },
+                ParameterOption { label: "60 Hz".to_string(),   value: "2".to_string() },
+            ];
+            params.push(CameraParameter::Select {
+                param_type: ParameterType::PowerLineFrequency,
+                current:    data.value.to_string(),
+                options,
+            });
         }
     }
 
@@ -642,19 +677,15 @@ fn get_parameters_impl(state: &DeviceState) -> Result<Vec<CameraParameter>, Came
 
 fn set_parameter_impl(
     state: &mut DeviceState,
-    kind: &str,
-    value: i32,
+    param_type: ParameterType,
+    value: &str,
 ) -> Result<(), CameraError> {
-    // Format switch: apply the new native media type then flush the reader.
-    // The next ReadSample call will return frames in the new format seamlessly.
-    if kind == "video_format" {
-        let idx = value as usize;
+    // Format switch — value is the format index as a string.
+    if param_type == ParameterType::VideoFormat {
+        let idx: usize = value.parse().map_err(|_| CameraError::NotSupported)?;
         let fmt = state.formats.get(idx).ok_or(CameraError::NotSupported)?;
         unsafe {
-            state
-                .reader
-                .SetCurrentMediaType(video_stream(), None, &fmt.media_type)
-                .map_err(win_err)?;
+            state.reader.SetCurrentMediaType(video_stream(), None, &fmt.media_type).map_err(win_err)?;
             let _ = state.reader.Flush(video_stream());
         }
         state.current_format_idx = idx;
@@ -664,31 +695,58 @@ fn set_parameter_impl(
         return Ok(());
     }
 
-    // Auto/manual toggle: kind ends with "_auto", or is "focus_mode"/"exposure_mode".
-    if kind == "focus_mode" {
-        return set_auto_impl(state, "focus", value != 0);
-    }
-    if kind == "exposure_mode" {
-        return set_auto_impl(state, "exposure", value != 0);
-    }
-    if kind == "white_balance_mode" {
-        return set_auto_impl(state, "white_balance", value != 0);
-    }
-    if let Some(base) = kind.strip_suffix("_auto") {
-        return set_auto_impl(state, base, value != 0);
+    // Power line frequency — set via IKsControl::KsProperty.
+    if param_type == ParameterType::PowerLineFrequency {
+        let int_val: i32 = value.parse().map_err(|_| CameraError::NotSupported)?;
+        let ks = state.ks_control.as_ref().ok_or(CameraError::NotSupported)?;
+        let prop = KsPropId {
+            set:   PROPSETID_VIDCAP_VIDEOPROCAMP,
+            id:    KSPROP_VIDPROCAMP_POWERLINE,
+            flags: KSPROPERTY_TYPE_SET,
+        };
+        let mut data = KsVideoProcAmpValue { value: int_val, flags: 2 /* manual */, capabilities: 0 };
+        let mut bytes_returned = 0u32;
+        unsafe {
+            ks.KsProperty(
+                &prop as *const KsPropId as *const _,
+                std::mem::size_of::<KsPropId>() as u32,
+                &mut data as *mut _ as *mut core::ffi::c_void,
+                std::mem::size_of::<KsVideoProcAmpValue>() as u32,
+                &mut bytes_returned,
+            )
+        }.map_err(win_err)?;
+        return Ok(());
     }
 
+    // Mode (auto/manual) toggles — value "1" = auto, "0" = manual.
+    let auto = value != "0";
+    match param_type {
+        ParameterType::BrightnessMode    => return set_auto_vpa(state, VideoProcAmp_Brightness,           auto),
+        ParameterType::ContrastMode      => return set_auto_vpa(state, VideoProcAmp_Contrast,             auto),
+        ParameterType::HueMode           => return set_auto_vpa(state, VideoProcAmp_Hue,                  auto),
+        ParameterType::SaturationMode    => return set_auto_vpa(state, VideoProcAmp_Saturation,           auto),
+        ParameterType::WhiteBalanceMode  => return set_auto_vpa(state, VideoProcAmp_WhiteBalance,         auto),
+        ParameterType::GainMode          => return set_auto_vpa(state, VideoProcAmp_Gain,                  auto),
+        ParameterType::ExposureMode      => return set_auto_cc(state,  CameraControl_Exposure,            auto),
+        ParameterType::FocusMode         => return set_auto_cc(state,  CameraControl_Focus,               auto),
+        ParameterType::PanMode           => return set_auto_cc(state,  CameraControl_Pan,                 auto),
+        ParameterType::TiltMode          => return set_auto_cc(state,  CameraControl_Tilt,                auto),
+        ParameterType::RollMode          => return set_auto_cc(state,  CameraControl_Roll,                auto),
+        _ => {}
+    }
+
+    // Range params — value is a stringified integer.
+    let int_val: i32 = value.parse().map_err(|_| CameraError::NotSupported)?;
+
     if let Some(vpa) = &state.video_proc_amp {
-        if let Some(prop) = vpa_prop(kind) {
-            // Setting a manual value always uses MANUAL flag to disable auto mode.
-            unsafe { vpa.Set(prop.0, value, VideoProcAmp_Flags_Manual.0) }.map_err(win_err)?;
+        if let Some(prop) = vpa_prop(param_type) {
+            unsafe { vpa.Set(prop.0, int_val, VideoProcAmp_Flags_Manual.0) }.map_err(win_err)?;
             return Ok(());
         }
     }
-
     if let Some(cc) = &state.camera_control {
-        if let Some(prop) = cc_prop(kind) {
-            unsafe { cc.Set(prop.0, value, CameraControl_Flags_Manual.0) }.map_err(win_err)?;
+        if let Some(prop) = cc_prop(param_type) {
+            unsafe { cc.Set(prop.0, int_val, CameraControl_Flags_Manual.0) }.map_err(win_err)?;
             return Ok(());
         }
     }
@@ -696,31 +754,20 @@ fn set_parameter_impl(
     Err(CameraError::NotSupported)
 }
 
-fn set_auto_impl(state: &DeviceState, base_kind: &str, auto: bool) -> Result<(), CameraError> {
-    if let Some(vpa) = &state.video_proc_amp {
-        if let Some(prop) = vpa_prop(base_kind) {
-            // Preserve the current manual value when switching modes.
-            let mut cur_value = 0i32;
-            let mut cur_flags = 0i32;
-            unsafe { vpa.Get(prop.0, &mut cur_value, &mut cur_flags) }.ok();
-            let flags = if auto { VideoProcAmp_Flags_Auto.0 } else { VideoProcAmp_Flags_Manual.0 };
-            unsafe { vpa.Set(prop.0, cur_value, flags) }.map_err(win_err)?;
-            return Ok(());
-        }
-    }
+fn set_auto_vpa(state: &DeviceState, prop: VideoProcAmpProperty, auto: bool) -> Result<(), CameraError> {
+    let vpa = state.video_proc_amp.as_ref().ok_or(CameraError::NotSupported)?;
+    let mut cur_value = 0i32; let mut cur_flags = 0i32;
+    unsafe { vpa.Get(prop.0, &mut cur_value, &mut cur_flags) }.ok();
+    let flags = if auto { VideoProcAmp_Flags_Auto.0 } else { VideoProcAmp_Flags_Manual.0 };
+    unsafe { vpa.Set(prop.0, cur_value, flags) }.map_err(win_err)
+}
 
-    if let Some(cc) = &state.camera_control {
-        if let Some(prop) = cc_prop(base_kind) {
-            let mut cur_value = 0i32;
-            let mut cur_flags = 0i32;
-            unsafe { cc.Get(prop.0, &mut cur_value, &mut cur_flags) }.ok();
-            let flags = if auto { CameraControl_Flags_Auto.0 } else { CameraControl_Flags_Manual.0 };
-            unsafe { cc.Set(prop.0, cur_value, flags) }.map_err(win_err)?;
-            return Ok(());
-        }
-    }
-
-    Err(CameraError::NotSupported)
+fn set_auto_cc(state: &DeviceState, prop: CameraControlProperty, auto: bool) -> Result<(), CameraError> {
+    let cc = state.camera_control.as_ref().ok_or(CameraError::NotSupported)?;
+    let mut cur_value = 0i32; let mut cur_flags = 0i32;
+    unsafe { cc.Get(prop.0, &mut cur_value, &mut cur_flags) }.ok();
+    let flags = if auto { CameraControl_Flags_Auto.0 } else { CameraControl_Flags_Manual.0 };
+    unsafe { cc.Set(prop.0, cur_value, flags) }.map_err(win_err)
 }
 
 // ---------------------------------------------------------------------------
@@ -872,29 +919,29 @@ fn yuyv_to_jpeg(data: &[u8], width: u32, height: u32) -> Result<Vec<u8>, CameraE
     Ok(jpeg_buf)
 }
 
-fn vpa_prop(kind: &str) -> Option<VideoProcAmpProperty> {
-    match kind {
-        "brightness" => Some(VideoProcAmp_Brightness),
-        "contrast" => Some(VideoProcAmp_Contrast),
-        "hue" => Some(VideoProcAmp_Hue),
-        "saturation" => Some(VideoProcAmp_Saturation),
-        "sharpness" => Some(VideoProcAmp_Sharpness),
-        "gamma" => Some(VideoProcAmp_Gamma),
-        "white_balance" => Some(VideoProcAmp_WhiteBalance),
-        "backlight_compensation" => Some(VideoProcAmp_BacklightCompensation),
-        "gain" => Some(VideoProcAmp_Gain),
+fn vpa_prop(pt: ParameterType) -> Option<VideoProcAmpProperty> {
+    match pt {
+        ParameterType::Brightness           => Some(VideoProcAmp_Brightness),
+        ParameterType::Contrast             => Some(VideoProcAmp_Contrast),
+        ParameterType::Hue                  => Some(VideoProcAmp_Hue),
+        ParameterType::Saturation           => Some(VideoProcAmp_Saturation),
+        ParameterType::Sharpness            => Some(VideoProcAmp_Sharpness),
+        ParameterType::Gamma                => Some(VideoProcAmp_Gamma),
+        ParameterType::WhiteBalance         => Some(VideoProcAmp_WhiteBalance),
+        ParameterType::BacklightCompensation=> Some(VideoProcAmp_BacklightCompensation),
+        ParameterType::Gain                 => Some(VideoProcAmp_Gain),
         _ => None,
     }
 }
 
-fn cc_prop(kind: &str) -> Option<CameraControlProperty> {
-    match kind {
-        "pan" => Some(CameraControl_Pan),
-        "tilt" => Some(CameraControl_Tilt),
-        "roll" => Some(CameraControl_Roll),
-        "zoom" => Some(CameraControl_Zoom),
-        "exposure" => Some(CameraControl_Exposure),
-        "focus" => Some(CameraControl_Focus),
+fn cc_prop(pt: ParameterType) -> Option<CameraControlProperty> {
+    match pt {
+        ParameterType::Pan      => Some(CameraControl_Pan),
+        ParameterType::Tilt     => Some(CameraControl_Tilt),
+        ParameterType::Roll     => Some(CameraControl_Roll),
+        ParameterType::Zoom     => Some(CameraControl_Zoom),
+        ParameterType::Exposure => Some(CameraControl_Exposure),
+        ParameterType::Focus    => Some(CameraControl_Focus),
         _ => None,
     }
 }

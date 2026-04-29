@@ -3,7 +3,10 @@ use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::sync::mpsc;
 
-use crate::camera::{CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo, ParameterOption};
+use crate::camera::{
+    CameraBackend, CameraError, CameraParameter, DeviceId, DeviceInfo,
+    ParameterOption, ParameterType,
+};
 
 // ---------------------------------------------------------------------------
 // C bridge constants — must match bridge.h
@@ -88,8 +91,8 @@ enum Command {
     },
     SetParameter {
         device_id: String,
-        kind: String,
-        value: i32,
+        param_type: ParameterType,
+        value: String,
         reply: mpsc::Sender<Result<(), CameraError>>,
     },
     GetLiveViewFrame {
@@ -187,13 +190,18 @@ impl CameraBackend for WebcamMacosBackend {
         reply_rx.recv().unwrap_or(Err(CameraError::SdkError(0xFFFF_FFFF)))
     }
 
-    fn set_parameter(&self, native_id: &str, kind: &str, value: i32) -> Result<(), CameraError> {
+    fn set_parameter(
+        &self,
+        native_id: &str,
+        param_type: ParameterType,
+        value: &str,
+    ) -> Result<(), CameraError> {
         let (reply_tx, reply_rx) = mpsc::channel();
         self.tx
             .send(Command::SetParameter {
                 device_id: native_id.to_string(),
-                kind: kind.to_string(),
-                value,
+                param_type,
+                value: value.to_string(),
                 reply: reply_tx,
             })
             .map_err(|_| CameraError::SdkError(0xFFFF_FFFF))?;
@@ -246,8 +254,8 @@ fn actor_thread(rx: mpsc::Receiver<Command>) {
             Ok(Command::GetParameters { device_id, reply }) => {
                 let _ = reply.send(get_parameters_impl(&device_id, &sessions));
             }
-            Ok(Command::SetParameter { device_id, kind, value, reply }) => {
-                let _ = reply.send(set_parameter_impl(&device_id, &kind, value, &sessions));
+            Ok(Command::SetParameter { device_id, param_type, value, reply }) => {
+                let _ = reply.send(set_parameter_impl(&device_id, param_type, &value, &sessions));
             }
             Ok(Command::GetLiveViewFrame { device_id, reply }) => {
                 let _ = reply.send(capture_frame_impl(&device_id, &sessions));
@@ -339,22 +347,21 @@ fn get_parameters_impl(
     }
     buf.truncate(count as usize);
 
-    let params = buf
+    let params: Vec<CameraParameter> = buf[..buf.len().min(count as usize)]
         .iter()
-        .map(|d| {
-            let kind = unsafe { CStr::from_ptr(d.kind.as_ptr()) }
-                .to_string_lossy()
-                .into_owned();
+        .filter_map(|d| {
+            let c_kind = unsafe { CStr::from_ptr(d.kind.as_ptr()) }
+                .to_string_lossy();
+            let param_type = c_kind_to_param_type(&c_kind)?;
 
             if d.is_range != 0 {
-                CameraParameter {
-                    kind,
-                    current: d.current.to_string(),
-                    options: vec![],
-                    min: Some(d.min),
-                    max: Some(d.max),
-                    step: Some(if d.step > 0 { d.step } else { 1 }),
-                }
+                Some(CameraParameter::Range {
+                    param_type,
+                    current: d.current,
+                    min: d.min,
+                    max: d.max,
+                    step: if d.step > 0 { d.step } else { 1 },
+                })
             } else {
                 let num_options = d.num_options as usize;
                 let options: Vec<ParameterOption> = d.options[..num_options]
@@ -363,38 +370,120 @@ fn get_parameters_impl(
                         let label = unsafe { CStr::from_ptr(o.label.as_ptr()) }
                             .to_string_lossy()
                             .into_owned();
-                        ParameterOption { label, value: o.value }
+                        ParameterOption { label, value: o.value.to_string() }
                     })
                     .collect();
-
-                let current = options
-                    .iter()
-                    .find(|o| o.value == d.current)
-                    .map(|o| o.label.clone())
-                    .unwrap_or_else(|| d.current.to_string());
-
-                CameraParameter { kind, current, options, min: None, max: None, step: None }
+                let current = d.current.to_string();
+                Some(CameraParameter::Select { param_type, current, options })
             }
         })
         .collect();
 
-    Ok(params)
+    Ok(hide_value_params_in_auto_mode(params))
 }
 
 fn set_parameter_impl(
     device_id: &str,
-    kind: &str,
-    value: i32,
+    param_type: ParameterType,
+    value: &str,
     sessions: &HashMap<String, SessionHandle>,
 ) -> Result<(), CameraError> {
     let handle = sessions.get(device_id).ok_or(CameraError::NotConnected)?.0;
-    let c_kind = CString::new(kind).map_err(|_| CameraError::NotSupported)?;
+    let c_kind = param_type_to_c_kind(param_type).ok_or(CameraError::NotSupported)?;
+    let c_kind = CString::new(c_kind).map_err(|_| CameraError::NotSupported)?;
+    let int_val: i32 = value.parse().map_err(|_| CameraError::NotSupported)?;
 
-    let ret = unsafe { wc_set_parameter(handle, c_kind.as_ptr(), value) };
-    if ret != 0 {
-        Err(CameraError::NotSupported)
-    } else {
-        Ok(())
+    let ret = unsafe { wc_set_parameter(handle, c_kind.as_ptr(), int_val) };
+    if ret != 0 { Err(CameraError::NotSupported) } else { Ok(()) }
+}
+
+/// Removes value parameters whose corresponding *_mode parameter is set to "auto" ("1").
+fn hide_value_params_in_auto_mode(params: Vec<CameraParameter>) -> Vec<CameraParameter> {
+    // (value_type, mode_type): hide value_type when mode_type current == "1" (auto)
+    const PAIRS: &[(ParameterType, ParameterType)] = &[
+        (ParameterType::WhiteBalance, ParameterType::WhiteBalanceMode),
+        (ParameterType::Exposure,     ParameterType::ExposureMode),
+        (ParameterType::Gain,         ParameterType::GainMode),
+        (ParameterType::Brightness,   ParameterType::BrightnessMode),
+        (ParameterType::Contrast,     ParameterType::ContrastMode),
+        (ParameterType::Hue,          ParameterType::HueMode),
+        (ParameterType::Saturation,   ParameterType::SaturationMode),
+        (ParameterType::Focus,        ParameterType::FocusMode),
+        (ParameterType::Pan,          ParameterType::PanMode),
+        (ParameterType::Tilt,         ParameterType::TiltMode),
+        (ParameterType::Roll,         ParameterType::RollMode),
+    ];
+
+    // Collect the mode types that are currently in auto mode.
+    let auto_modes: Vec<ParameterType> = params
+        .iter()
+        .filter_map(|p| {
+            if let CameraParameter::Select { param_type, current, .. } = p {
+                PAIRS
+                    .iter()
+                    .find(|&&(_, mode_type)| mode_type == *param_type && current == "1")
+                    .map(|&(_, mode_type)| mode_type)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if auto_modes.is_empty() {
+        return params;
+    }
+
+    params
+        .into_iter()
+        .filter(|p| {
+            let pt = match p {
+                CameraParameter::Range { param_type, .. }
+                | CameraParameter::Select { param_type, .. }
+                | CameraParameter::RangeSelect { param_type, .. } => *param_type,
+            };
+            !PAIRS
+                .iter()
+                .any(|&(value_type, mode_type)| pt == value_type && auto_modes.contains(&mode_type))
+        })
+        .collect()
+}
+
+/// Maps a C bridge kind string (from wc_get_parameters) to a ParameterType.
+/// Returns None for unknown kinds, which causes the parameter to be silently skipped.
+fn c_kind_to_param_type(kind: &str) -> Option<ParameterType> {
+    match kind {
+        "brightness"                => Some(ParameterType::Brightness),
+        "contrast"                  => Some(ParameterType::Contrast),
+        "hue"                       => Some(ParameterType::Hue),
+        "saturation"                => Some(ParameterType::Saturation),
+        "sharpness"                 => Some(ParameterType::Sharpness),
+        "gain"                      => Some(ParameterType::Gain),
+        "backlight_compensation"    => Some(ParameterType::BacklightCompensation),
+        "zoom_absolute"             => Some(ParameterType::Zoom),
+        "white_balance_temperature" => Some(ParameterType::WhiteBalance),
+        "white_balance_auto"        => Some(ParameterType::WhiteBalanceMode),
+        "exposure_time_absolute"    => Some(ParameterType::Exposure),
+        "exposure_auto"             => Some(ParameterType::ExposureMode),
+        _ => None,
+    }
+}
+
+/// Maps a ParameterType back to the C bridge string expected by wc_set_parameter.
+fn param_type_to_c_kind(pt: ParameterType) -> Option<&'static str> {
+    match pt {
+        ParameterType::Brightness           => Some("brightness"),
+        ParameterType::Contrast             => Some("contrast"),
+        ParameterType::Hue                  => Some("hue"),
+        ParameterType::Saturation           => Some("saturation"),
+        ParameterType::Sharpness            => Some("sharpness"),
+        ParameterType::Gain                 => Some("gain"),
+        ParameterType::BacklightCompensation=> Some("backlight_compensation"),
+        ParameterType::Zoom                 => Some("zoom_absolute"),
+        ParameterType::WhiteBalance         => Some("white_balance_temperature"),
+        ParameterType::WhiteBalanceMode     => Some("white_balance_auto"),
+        ParameterType::Exposure             => Some("exposure_time_absolute"),
+        ParameterType::ExposureMode         => Some("exposure_auto"),
+        _ => None,
     }
 }
 

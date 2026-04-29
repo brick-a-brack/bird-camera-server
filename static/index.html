@@ -394,8 +394,9 @@
 
     function renderParamItem(p, id) {
       const name = escHtml(formatParamName(p.type));
-      if (p.min !== undefined && p.max !== undefined) {
-        const cur  = parseInt(p.current, 10);
+
+      if (p.kind === 'range') {
+        const cur  = p.current;
         const step = p.step || 1;
         return `
           <div class="param-item">
@@ -409,13 +410,15 @@
           </div>`;
       }
 
+      // select or range_select — p.current is the raw value key; look up the label for display
+      const currentLabel = p.options.find(o => o.value === p.current)?.label ?? p.current;
       return `
         <div class="param-item">
           <div class="param-label">${name}</div>
-          <div class="param-current">${escHtml(p.current)}</div>
+          <div class="param-current">${escHtml(currentLabel)}</div>
           <select class="param-select" data-device-id="${escHtml(id)}" data-kind="${escHtml(p.type)}">
             ${p.options.map(o => `
-              <option value="${o.value}" ${o.value === p.current || `${o.value}` === `${p.current}` ? 'selected' : ''}>
+              <option value="${escHtml(o.value)}" ${o.value === p.current ? 'selected' : ''}>
                 ${escHtml(o.label)}
               </option>`).join('')}
           </select>
@@ -425,7 +428,7 @@
     async function setParamSelect(select) {
       const deviceId = select.dataset.deviceId;
       const kind     = select.dataset.kind;
-      const value    = parseInt(select.value, 10);
+      const value    = select.value; // always a string — API expects string values
 
       select.disabled = true;
       try {
@@ -440,7 +443,7 @@
     async function setParamRange(input) {
       const deviceId = input.dataset.deviceId;
       const kind     = input.dataset.kind;
-      const value    = parseInt(input.value, 10);
+      const value    = input.value; // always a string — API expects string values
 
       input.disabled = true;
       try {
@@ -534,7 +537,14 @@
       const img   = document.getElementById(`lv-img-${id}`);
       if (!panel) return;
 
-      img.src = '';
+      // Replace the img element to force-abort the MJPEG connection.
+      // Setting img.src = '' is not reliable — the browser may keep buffering
+      // the multipart stream. Replacing the node removes the resource fetch entirely.
+      const newImg = document.createElement('img');
+      newImg.id  = `lv-img-${id}`;
+      newImg.alt = 'Live view';
+      img.replaceWith(newImg);
+
       panel.classList.remove('open');
       delete liveViews[id];
 
