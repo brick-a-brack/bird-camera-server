@@ -30,3 +30,4 @@ windows = { version = "0.58", optional = true, features = [
 
 [build-dependencies]
 cc = "1"
+winresource = "0.1"

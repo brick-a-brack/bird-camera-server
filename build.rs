@@ -4,6 +4,14 @@ fn main() {
     println!("cargo:rerun-if-changed=external/EDSDK");
     println!("cargo:rerun-if-changed=src/backends/webcam_macos/bridge.m");
     println!("cargo:rerun-if-changed=src/backends/webcam_macos/bridge.h");
+    println!("cargo:rerun-if-changed=logo/logo.ico");
+
+    #[cfg(target_os = "windows")]
+    {
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("logo/logo.ico");
+        res.compile().expect("failed to compile Windows resources");
+    }
 
     if std::env::var_os("CARGO_FEATURE_BACKEND_CANON").is_some() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
