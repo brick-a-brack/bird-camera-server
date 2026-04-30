@@ -69,20 +69,49 @@ fn build_backends() -> BackendState {
     Arc::new(map)
 }
 
-fn parse_token() -> String {
+struct Args {
+    token: String,
+    port:  Option<u16>,
+}
+
+fn parse_args() -> Args {
     let mut args = std::env::args().skip(1);
+    let mut token = None::<String>;
+    let mut port  = None::<u16>;
+
     while let Some(arg) = args.next() {
-        if arg == "--token" {
-            if let Some(val) = args.next() {
-                return val;
-            }
+        match arg.as_str() {
+            "--token" => token = args.next(),
+            "--port"  => port  = args.next().and_then(|v| v.parse().ok()),
+            _         => {}
         }
     }
-    uuid::Uuid::new_v4().to_string()
+
+    Args {
+        token: token.unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+        port,
+    }
+}
+
+fn resolve_port(explicit: Option<u16>) -> u16 {
+    explicit.unwrap_or(8040)
+}
+
+async fn bind_listener(port: u16) -> tokio::net::TcpListener {
+    if let Ok(l) = tokio::net::TcpListener::bind(format!("127.0.0.1:{port}")).await {
+        return l;
+    }
+    eprintln!("[warn] port {port} is in use, letting the OS assign a free port");
+    tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to any port")
 }
 
 async fn run_server() {
-    let token = parse_token();
+    let args  = parse_args();
+    let port  = resolve_port(args.port);
+    let token = args.token;
+
     let backends = build_backends();
     let state = AppState::new(backends, token.clone());
 
@@ -100,12 +129,11 @@ async fn run_server() {
         .layer(axum::middleware::from_fn_with_state(state, auth::auth_middleware))
         .layer(CorsLayer::permissive());
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
-        .await
-        .expect("failed to bind to 127.0.0.1:8080");
-
+    let listener = bind_listener(port).await;
     let addr = listener.local_addr().unwrap();
-    println!("Listening on http://{}/?token={}", addr, token);
+    println!("[config] PORT={}", addr.port());
+    println!("[config] TOKEN={}", token);
+    println!("[info] Listening on http://{}/?token={}", addr, token);
     axum::serve(listener, app).await.unwrap();
 }
 

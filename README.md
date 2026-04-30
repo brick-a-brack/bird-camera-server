@@ -12,40 +12,35 @@
 
 ## Get started
 
-TODO
+Start the server — a token is generated automatically and the URL to open is printed:
+
+```sh
+./toucan-camera-server
+```
+
+```
+[config] PORT=8040
+[config] TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+[info] Listening on http://127.0.0.1:8040/?token=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
+Open the printed URL in a browser to access the web UI. The token is already included in the URL — no extra setup needed.
+
+**Options**
+
+| Flag | Description |
+| --- | --- |
+| `--port <port>` | Port to listen on (default: `8040`, falls back to a free port if in use) |
+| `--token <token>` | Authentication token (default: auto-generated UUID v4) |
 
 ## Authentication
 
-Every request must be authenticated with a token.
+Every request must include the token, either as a header or a query parameter:
 
-**Generating the token**
-
-By default, a random UUID v4 token is generated at startup. You can also provide your own:
-
-```sh
-# Auto-generated token (printed at startup)
-./toucan-camera-server
-
-# Custom token
-./toucan-camera-server --token my-secret-token
-```
-
-At startup, the server prints the base URL including the token:
-
-```
-Listening on http://127.0.0.1:8080/?token=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-```
-
-Opening this URL in a browser is enough to use the web UI — the token is read from the query string automatically.
-
-**Authenticating requests**
-
-Two methods are accepted:
-
-| Method                  | Example                         |
-| ----------------------- | ------------------------------- |
-| `Authorization` header  | `Authorization: Bearer <token>` |
-| `token` query parameter | `GET /cameras?token=<token>`    |
+| Method | Example |
+| --- | --- |
+| `Authorization` header | `Authorization: Bearer <token>` |
+| `token` query parameter | `GET /cameras?token=<token>` |
 
 Requests with an invalid or missing token receive a `403 Forbidden` response.
 
