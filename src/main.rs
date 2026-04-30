@@ -1,3 +1,4 @@
+mod auth;
 mod backends;
 mod camera;
 mod routes;
@@ -68,9 +69,22 @@ fn build_backends() -> BackendState {
     Arc::new(map)
 }
 
+fn parse_token() -> String {
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        if arg == "--token" {
+            if let Some(val) = args.next() {
+                return val;
+            }
+        }
+    }
+    uuid::Uuid::new_v4().to_string()
+}
+
 async fn run_server() {
+    let token = parse_token();
     let backends = build_backends();
-    let state = AppState::new(backends);
+    let state = AppState::new(backends, token.clone());
 
     let app = Router::new()
         .route("/", get(index))
@@ -82,14 +96,16 @@ async fn run_server() {
         .route("/cameras/{id}/settings", put(cameras::set_parameter))
         .route("/cameras/{id}/liveview", get(cameras::live_view))
         .route("/cameras/{id}/capture", axum::routing::post(cameras::capture_photo))
-        .with_state(state)
+        .with_state(state.clone())
+        .layer(axum::middleware::from_fn_with_state(state, auth::auth_middleware))
         .layer(CorsLayer::permissive());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
         .await
         .expect("failed to bind to 127.0.0.1:8080");
 
-    println!("Listening on http://{}", listener.local_addr().unwrap());
+    let addr = listener.local_addr().unwrap();
+    println!("Listening on http://{}/?token={}", addr, token);
     axum::serve(listener, app).await.unwrap();
 }
 

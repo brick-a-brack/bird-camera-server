@@ -32,6 +32,7 @@ type LiveViewSenders = Arc<Mutex<HashMap<String, broadcast::Sender<Arc<Bytes>>>>
 pub struct AppState {
     pub backends: BackendState,
     pub live_views: LiveViewSenders,
+    pub token: String,
 }
 
 impl axum::extract::FromRef<AppState> for BackendState {
@@ -41,10 +42,11 @@ impl axum::extract::FromRef<AppState> for BackendState {
 }
 
 impl AppState {
-    pub fn new(backends: BackendState) -> Self {
+    pub fn new(backends: BackendState, token: String) -> Self {
         Self {
             backends,
             live_views: Arc::new(Mutex::new(HashMap::new())),
+            token,
         }
     }
 }
