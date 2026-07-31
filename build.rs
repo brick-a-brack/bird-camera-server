@@ -242,6 +242,15 @@ fn copy_sony_runtime(libdir: &str, target: &str) {
         if path.is_dir() {
             // CrAdapter/ (transport plugins) — copy the whole tree.
             copy_tree(&path, &profile_dir.join(&name));
+            // macOS: Cr_Core locates its transport plugins through
+            // NSBundle.mainBundle.bundlePath + "Contents/Frameworks/CrAdapter"
+            // (the app-bundle layout), NOT flat next to the binary. Without a copy
+            // there, EnumCameraObjects returns CrError_Adaptor_Create (0x8703) and
+            // no Sony camera is ever listed. The flat copy above still lets the
+            // binary resolve libCr_Core / libmonitor_protocol via @loader_path.
+            if target.contains("apple") && name.to_str() == Some("CrAdapter") {
+                copy_tree(&path, &profile_dir.join("Contents/Frameworks").join(&name));
+            }
         } else {
             // Skip the import library; it is only needed at link time.
             if path.extension().and_then(|e| e.to_str()) == Some("lib") {

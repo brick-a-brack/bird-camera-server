@@ -222,21 +222,33 @@ jobs:
 
           # Sony CrSDK runtime — Cr_Core + monitor_protocol dylibs + CrAdapter/
           # transport plugins staged next to the per-arch binary by build.rs. The
-          # dylibs are universal, so copy from one arch; the binary resolves them
-          # via @loader_path (rpath added by build.rs).
+          # dylibs are universal, so copy from one arch; the binary resolves
+          # Cr_Core / monitor_protocol via @loader_path (rpath added by build.rs).
+          #
+          # macOS CrAdapter placement is what actually makes cameras appear:
+          # Cr_Core locates its transport plugins through NSBundle.mainBundle
+          # bundlePath + "Contents/Frameworks/CrAdapter", NOT flat next to the
+          # binary. A flat CrAdapter/ alone loads fine (SDK::Init succeeds) but
+          # EnumCameraObjects then returns CrError_Adaptor_Create (0x8703) and the
+          # camera never appears. build.rs stages BOTH the flat copy and the
+          # Contents/Frameworks/CrAdapter bundle copy; ship the bundle one.
+          #
           # Cr_Core is linked at build time — a successful build means the runtime
-          # must be present. Fail hard rather than ship an artifact that loads but
-          # enumerates zero cameras (SDK::Init succeeds without CrAdapter, but
-          # EnumCameraObjects then returns 0 — the "camera never appears" bug).
+          # must be present. Fail hard rather than ship a zero-camera artifact.
           SONY_REL="target/aarch64-apple-darwin/release"
           for lib in libCr_Core.dylib libmonitor_protocol.dylib libmonitor_protocol_pf.dylib; do
             [ -f "$SONY_REL/$lib" ] || { echo "ERROR: Sony runtime $lib missing in $SONY_REL"; exit 1; }
             cp "$SONY_REL/$lib" dist/toucan-camera-server-macos/
           done
+          # Flat copy (harmless, keeps the layout uniform across platforms).
           [ -d "$SONY_REL/CrAdapter" ] || { echo "ERROR: Sony CrAdapter/ missing — camera would never enumerate"; exit 1; }
           cp -R "$SONY_REL/CrAdapter" dist/toucan-camera-server-macos/
-          [ -n "$(ls -A dist/toucan-camera-server-macos/CrAdapter 2>/dev/null)" ] \
-            || { echo "ERROR: CrAdapter/ is empty in the macOS artifact"; exit 1; }
+          # Bundle-relative copy — the one Cr_Core actually reads on macOS.
+          SONY_BUNDLE="$SONY_REL/Contents/Frameworks/CrAdapter"
+          [ -n "$(ls -A "$SONY_BUNDLE" 2>/dev/null)" ] \
+            || { echo "ERROR: Contents/Frameworks/CrAdapter missing/empty — camera would never enumerate (0x8703)"; exit 1; }
+          mkdir -p dist/toucan-camera-server-macos/Contents/Frameworks
+          cp -R "$SONY_BUNDLE" dist/toucan-camera-server-macos/Contents/Frameworks/
           echo "Sony CrSDK runtime bundled into the macOS artifact"
 
           cd dist/toucan-camera-server-macos
