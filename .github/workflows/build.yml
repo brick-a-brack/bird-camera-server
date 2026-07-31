@@ -224,14 +224,20 @@ jobs:
           # transport plugins staged next to the per-arch binary by build.rs. The
           # dylibs are universal, so copy from one arch; the binary resolves them
           # via @loader_path (rpath added by build.rs).
+          # Cr_Core is linked at build time — a successful build means the runtime
+          # must be present. Fail hard rather than ship an artifact that loads but
+          # enumerates zero cameras (SDK::Init succeeds without CrAdapter, but
+          # EnumCameraObjects then returns 0 — the "camera never appears" bug).
           SONY_REL="target/aarch64-apple-darwin/release"
           for lib in libCr_Core.dylib libmonitor_protocol.dylib libmonitor_protocol_pf.dylib; do
-            [ -f "$SONY_REL/$lib" ] && cp "$SONY_REL/$lib" dist/toucan-camera-server-macos/
+            [ -f "$SONY_REL/$lib" ] || { echo "ERROR: Sony runtime $lib missing in $SONY_REL"; exit 1; }
+            cp "$SONY_REL/$lib" dist/toucan-camera-server-macos/
           done
-          if [ -d "$SONY_REL/CrAdapter" ]; then
-            cp -R "$SONY_REL/CrAdapter" dist/toucan-camera-server-macos/
-            echo "Sony CrSDK runtime bundled into the macOS artifact"
-          fi
+          [ -d "$SONY_REL/CrAdapter" ] || { echo "ERROR: Sony CrAdapter/ missing — camera would never enumerate"; exit 1; }
+          cp -R "$SONY_REL/CrAdapter" dist/toucan-camera-server-macos/
+          [ -n "$(ls -A dist/toucan-camera-server-macos/CrAdapter 2>/dev/null)" ] \
+            || { echo "ERROR: CrAdapter/ is empty in the macOS artifact"; exit 1; }
+          echo "Sony CrSDK runtime bundled into the macOS artifact"
 
           cd dist/toucan-camera-server-macos
           zip -r ../toucan-camera-server-macos.zip .
@@ -331,16 +337,26 @@ jobs:
           # transport plugins staged next to the binary by build.rs (the import lib
           # Cr_Core.lib is intentionally not shipped). Only present if the Sony SDK
           # was staged.
+          # Cr_Core is LINKED at build time, so if the build succeeded the runtime
+          # MUST be present. Fail hard rather than ship a zip that loads but
+          # enumerates zero cameras (SDK::Init succeeds without CrAdapter, but
+          # EnumCameraObjects returns 0 — the exact "camera never appears" bug).
           $sony = @("Cr_Core.dll", "monitor_protocol.dll", "monitor_protocol_pf.dll")
           foreach ($f in $sony) {
             $src = "target\x86_64-pc-windows-msvc\release\$f"
-            if (Test-Path $src) {
-              Copy-Item $src $out
+            if (-not (Test-Path $src)) {
+              Write-Error "Sony runtime $f missing at $src — build.rs did not stage it"; exit 1
             }
+            Copy-Item $src $out
           }
           $sonyAdapter = "target\x86_64-pc-windows-msvc\release\CrAdapter"
-          if (Test-Path $sonyAdapter) {
-            Copy-Item $sonyAdapter $out -Recurse -Force
+          if (-not (Test-Path $sonyAdapter)) {
+            Write-Error "Sony CrAdapter/ transport plugins missing at $sonyAdapter — the camera would never enumerate"; exit 1
+          }
+          Copy-Item $sonyAdapter $out -Recurse -Force
+          # Verify the plugins actually landed in the packaged dir.
+          if (-not (Test-Path "$out\CrAdapter\Cr_PTP_USB.dll")) {
+            Write-Error "CrAdapter\Cr_PTP_USB.dll not in the packaged artifact"; exit 1
           }
 
           Compress-Archive -Path "$out\*" -DestinationPath "dist\toucan-camera-server-windows.zip"
@@ -438,9 +454,15 @@ jobs:
           # resolves via $ORIGIN. monitor_protocol is dlopen'd, so it is not part of
           # the binary's ldd graph.
           for lib in libCr_Core.so libmonitor_protocol.so libmonitor_protocol_pf.so; do
-            [ -f "$REL/$lib" ] && cp "$REL/$lib" "$OUT/"
+            [ -f "$REL/$lib" ] || { echo "ERROR: Sony runtime $lib missing in $REL"; exit 1; }
+            cp "$REL/$lib" "$OUT/"
           done
-          [ -d "$REL/CrAdapter" ] && cp -R "$REL/CrAdapter" "$OUT/"
+          # SDK::Init succeeds without CrAdapter, but EnumCameraObjects then returns
+          # 0 — the "camera never appears" bug. A successful build linked Cr_Core, so
+          # the transport plugins must be present: fail hard if they are not.
+          [ -d "$REL/CrAdapter" ] || { echo "ERROR: Sony CrAdapter/ missing — camera would never enumerate"; exit 1; }
+          cp -R "$REL/CrAdapter" "$OUT/"
+          [ -n "$(ls -A "$OUT/CrAdapter" 2>/dev/null)" ] || { echo "ERROR: CrAdapter/ is empty in the Linux artifact"; exit 1; }
           # libCr_Core.so's only non-glibc NEEDED is libxml2.so.2. Ship it rather
           # than rely on the host: distributions have started moving to libxml2 2.15
           # (soname libxml2.so.16) and no longer package the .so.2 at all (Ubuntu
@@ -450,6 +472,24 @@ jobs:
           XML2="$(ldconfig -p | awk '/libxml2\.so\.2 \(libc6,x86-64\)/ {print $NF; exit}')"
           [ -n "$XML2" ] || { echo "ERROR: libxml2.so.2 not found on the runner"; exit 1; }
           cp -L "$XML2" "$OUT/libxml2.so.2"
+          # The runner's libxml2.so.2 is itself linked against ICU (libicuuc /
+          # libicudata / …). ICU is present on the runner, so the ldd check below
+          # passes here — but a minimal or newer target host may ship no matching
+          # ICU soname, and the artifact then dies at load with
+          # "libicuuc.so.NN: cannot open shared object file". Bundle libxml2's ICU
+          # closure next to it. A DT_RUNPATH of $ORIGIN on the main binary does NOT
+          # propagate to a transitively-loaded lib's own deps, so patch each shipped
+          # lib directly: libxml2 must find libicu*, and libicuuc must find
+          # libicudata, all within the artifact dir.
+          for icu in $(ldd "$OUT/libxml2.so.2" | awk '/libicu/ {print $3}'); do
+            [ -f "$icu" ] && cp -L "$icu" "$OUT/"
+          done
+          [ -n "$(ls -A "$OUT"/libicu*.so.* 2>/dev/null)" ] \
+            || { echo "ERROR: no ICU libs found for libxml2 on the runner"; exit 1; }
+          patchelf --set-rpath '$ORIGIN' "$OUT/libxml2.so.2"
+          for so in "$OUT"/libicu*.so.*; do
+            patchelf --set-rpath '$ORIGIN' "$so"
+          done
           # Webcam permissions setup — udev rule + install script.
           # End-user runs ./install.sh once after extraction (uses sudo).
           cp packaging/linux/99-toucan-camera.rules "$OUT/"
@@ -479,6 +519,17 @@ jobs:
           if [ "$(realpath "$XML2_RESOLVED")" != "$(realpath "$PWD/libxml2.so.2")" ]; then
             echo "ERROR: libxml2.so.2 resolves to '$XML2_RESOLVED', not the bundled copy"; exit 1
           fi
+          #  4. Every ICU lib pulled in by libxml2 must resolve to OUR bundled copy
+          #     too — otherwise the artifact still depends on the host's ICU (the
+          #     "libicuuc.so missing" failure on minimal/newer distros).
+          for so in ./libicu*.so.*; do
+            base="$(basename "$so")"
+            resolved="$(awk -v n="$base" '$1 == n {print $3}' /tmp/ldd.txt)"
+            [ -n "$resolved" ] || { echo "ERROR: $base not in the binary's dependency graph"; exit 1; }
+            if [ "$(realpath "$resolved")" != "$(realpath "$PWD/$base")" ]; then
+              echo "ERROR: $base resolves to '$resolved', not the bundled copy"; exit 1
+            fi
+          done
           if grep -F 'not found' /tmp/ldd.txt; then
             echo "ERROR: at least one transitive dependency missing"; exit 1
           fi
