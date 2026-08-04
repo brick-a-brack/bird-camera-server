@@ -281,14 +281,22 @@ fn usb_camera_map() -> HashMap<(u8, u8), (u16, Option<String>)> {
     }
 }
 
+/// Sony's USB vendor id. The dedicated Sony CrSDK backend enumerates bodies by
+/// their ILCE/ILME/ZV model number (e.g. "ILCE-7M4"), which is exactly the USB
+/// product string. libgphoto2 instead reports a marketing name ("Sony Alpha-A7 IV
+/// (PC Control)") that normalizes to a different token, so for Sony bodies the
+/// dedup key must be built from the USB product string too — otherwise the two
+/// backends never agree and the camera shows up twice.
+const USB_VENDOR_SONY: u16 = 0x054c;
+
 /// The cross-backend dedup key for a gphoto2 device: its real USB vendor (from
 /// nusb) plus its model. The model is libgphoto2's own name, except when that is
-/// a generic PTP/MTP class name — then the USB product string is used so the key
-/// matches the one a dedicated SDK backend emits for the same body. `None` when
-/// the USB device can't be resolved (non-USB port, enumeration blocked), in which
-/// case the device is simply never deduped.
+/// a generic PTP/MTP class name, or the body is a Sony (see [`USB_VENDOR_SONY`]) —
+/// then the USB product string is used so the key matches the one a dedicated SDK
+/// backend emits for the same body. `None` when the USB device can't be resolved
+/// (non-USB port, enumeration blocked), in which case it is simply never deduped.
 ///
-/// Note: this backend knows nothing about Canon/Nikon backends — it only
+/// Note: this backend knows nothing about Canon/Nikon/Sony backends — it only
 /// publishes its device's identity. The server decides which backend wins.
 fn gphoto_dedup_key(
     gphoto_model: &str,
@@ -296,7 +304,12 @@ fn gphoto_dedup_key(
     usb: &HashMap<(u8, u8), (u16, Option<String>)>,
 ) -> Option<String> {
     let (vendor, product) = parse_usb_port(port).and_then(|key| usb.get(&key))?;
-    let model = if is_generic_ptp_name(gphoto_model) {
+    // Prefer the USB product string when libgphoto2 only knows the body under a
+    // generic class name, or for Sony bodies (whose CrSDK keys off the model
+    // number == the product string, not libgphoto2's marketing name). Fall back
+    // to libgphoto2's own name if no product string is available.
+    let prefer_product = is_generic_ptp_name(gphoto_model) || *vendor == USB_VENDOR_SONY;
+    let model = if prefer_product {
         product.as_deref().filter(|s| !s.is_empty()).unwrap_or(gphoto_model)
     } else {
         gphoto_model
@@ -1371,6 +1384,30 @@ mod tests {
         usb.insert((20u8, 7u8), (0x04A9u16, Some("Canon Digital Camera".to_string())));
         let key = gphoto_dedup_key("Canon EOS R5", "usb:020,007", &usb);
         assert_eq!(key, Some(crate::camera::dedup_key(0x04A9, "Canon EOS R5")));
+    }
+
+    #[test]
+    fn dedup_key_uses_product_string_for_sony() {
+        // libgphoto2 names a Sony body by its marketing name, but the Sony CrSDK
+        // keys off the ILCE model number (== the USB product string). gphoto2 must
+        // use the product string so both backends agree and the α7 IV isn't shown
+        // twice ("Sony Alpha-A7 IV (PC Control)" + "Sony ILCE-7M4").
+        let mut usb = HashMap::new();
+        usb.insert((0u8, 3u8), (USB_VENDOR_SONY, Some("ILCE-7M4".to_string())));
+        let key = gphoto_dedup_key("Sony Alpha-A7 IV (PC Control)", "usb:000,003", &usb);
+        assert_eq!(key, Some(crate::camera::dedup_key(USB_VENDOR_SONY, "ILCE-7M4")));
+    }
+
+    #[test]
+    fn dedup_key_sony_falls_back_to_gphoto_name_without_product() {
+        // No USB product string available → keep libgphoto2's name (best effort).
+        let mut usb = HashMap::new();
+        usb.insert((0u8, 3u8), (USB_VENDOR_SONY, None));
+        let key = gphoto_dedup_key("Sony Alpha-A7 IV (PC Control)", "usb:000,003", &usb);
+        assert_eq!(
+            key,
+            Some(crate::camera::dedup_key(USB_VENDOR_SONY, "Sony Alpha-A7 IV (PC Control)"))
+        );
     }
 
     #[test]
