@@ -525,10 +525,14 @@ fn actor_thread(
     // scan every start.
     refresh_cache(&cache, &sessions, 1);
 
-    // Re-enumerate after this much idle time to pick up (un)plugged cameras. During
-    // active use (e.g. live view) commands arrive faster than this, so the refresh
-    // never fires and the blocking enumeration stays entirely off the hot path.
-    const REFRESH: Duration = Duration::from_secs(5);
+    // Re-enumerate after this much idle time to pick up (un)plugged cameras. Kept
+    // short because a powered-off *connected* body is only ever noticed here — the
+    // SDK does not reliably deliver OnDisconnected for a power cut, so enumeration
+    // dropping the device is the sole signal, and this interval bounds how long a
+    // gone camera lingers in the list. During active use (e.g. live view) commands
+    // arrive faster than this, so the refresh never fires and the blocking
+    // enumeration stays entirely off the hot path.
+    const REFRESH: Duration = Duration::from_secs(2);
 
     loop {
         match rx.recv_timeout(REFRESH) {
