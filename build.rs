@@ -909,6 +909,15 @@ fn is_bundleworthy(dep: &Path, is_mac: bool) -> bool {
             "libc.", "libm.", "libpthread.", "libdl.", "librt.", "ld-linux",
             "libgcc_s.", "libstdc++.", "libresolv.", "libnsl.", "linux-vdso",
             "libutil.", "libcrypt.", "libz.",
+            // Host-coupled: MUST come from the target machine, never the bundle.
+            // libudev talks to the host's systemd-udevd (netlink + /run/udev DB);
+            // a copy frozen at build time mismatches a different host's udevd and
+            // corrupts udev's device list. libusb-1.0 enumerates USB *through*
+            // libudev, so a stale bundled pair makes libusb_submit_transfer
+            // dereference bad state and segfault (Sony's dlopen'd CrAdapter libusb
+            // shares the process-global libudev the gphoto2 closure pulled in).
+            // Both are documented as pre-installed host deps (see build.yml).
+            "libudev.", "libusb-1.0.", "libusb.",
         ];
         let name = dep.file_name().and_then(|n| n.to_str()).unwrap_or("");
         !SYSTEM.iter().any(|s| name.starts_with(s))
