@@ -34,6 +34,8 @@ const SN_MAX_OPTIONS: usize = 512;
 
 const SN_OK: c_int = 0;
 const SN_NOT_READY: c_int = 2;
+/// `sn_capture` return code: autofocus could not lock, so nothing was shot.
+const SN_ERR_AF: c_int = 3;
 
 /// Sony's USB vendor id — used to build the cross-backend dedup key so the same
 /// body seen by gphoto2 (PTP) is recognised as this SDK's device.
@@ -635,6 +637,7 @@ fn list_devices_impl(
         .collect();
 
     let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int) };
+    eprintln!("[sony] sn_list_devices -> {count}");
     if count < 0 {
         return Err(CameraError::SdkError(0xFFFF_FFFF));
     }
@@ -676,17 +679,21 @@ fn connect_impl(
     Ok(())
 }
 
-/// CrError_Connect_TimeOut: the body is on the USB bus but never completes the
-/// handshake. It gets into that state when a previous PC Remote session was not
-/// closed (the server was killed rather than stopped), and it stays there until the
-/// camera is power-cycled — no amount of retrying clears it. Say so: reporting this
-/// as "device not found" sends people looking for a camera that is plugged in and
-/// visibly on.
+/// A camera that still believes a previous PC Remote session is open refuses the
+/// next Connect and stays that way until it is power-cycled — no amount of retrying
+/// clears it. The body says so with one of three CrErrors:
+/// - `CrError_Connect_TimeOut` (0x8208): on the USB bus but never completes the handshake.
+/// - `CrError_Reconnect_TimeOut` (0x8209): the SDK's auto-reconnect gave up.
+/// - `CrError_Connect_SessionAlreadyOpened` (0x8210): a session is explicitly still open.
+/// Map all three to the same actionable message: reporting them as "device not found"
+/// (or a raw hex code) sends people looking for a camera that is plugged in and visibly on.
 fn connect_error(device_id: &str, err: u32) -> CameraError {
     const CONNECT_TIMEOUT: u32 = 0x0000_8208;
+    const RECONNECT_TIMEOUT: u32 = 0x0000_8209;
+    const SESSION_ALREADY_OPENED: u32 = 0x0000_8210;
     const NOT_FOUND: u32 = 0xFFFF_FFFF;
     match err {
-        CONNECT_TIMEOUT => CameraError::Backend(
+        CONNECT_TIMEOUT | RECONNECT_TIMEOUT | SESSION_ALREADY_OPENED => CameraError::Backend(
             "the camera did not answer: it is still holding an earlier PC Remote \
              session. Turn it off and on again (or unplug and replug it)."
                 .to_string(),
@@ -921,6 +928,13 @@ fn capture_photo_impl(
     let mut size: u32 = 0;
     let ret = unsafe { sn_capture(handle, &mut data_ptr, &mut size) };
 
+    if ret == SN_ERR_AF {
+        return Err(CameraError::Backend(
+            "autofocus could not lock, so no photo was taken. Aim at something with \
+             more contrast, or switch the camera to manual focus."
+                .to_string(),
+        ));
+    }
     if ret != SN_OK || data_ptr.is_null() {
         return Err(CameraError::SdkError(0xFFFF_FFFD));
     }

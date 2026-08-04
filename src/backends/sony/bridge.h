@@ -36,6 +36,7 @@ extern "C" {
 #define SN_OK               0
 #define SN_ERR            (-1)
 #define SN_NOT_READY        2   /* live view frame not available yet */
+#define SN_ERR_AF           3   /* sn_capture: autofocus could not lock, no shot */
 
 /* sn_connect: the camera is not on the bus (no CrError covers this). */
 #define SN_CONNECT_NOT_FOUND 0xFFFFFFFFu
