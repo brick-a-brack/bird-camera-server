@@ -657,7 +657,6 @@ fn list_devices_impl(
         .collect();
 
     let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int, time_in_sec) };
-    eprintln!("[sony] sn_list_devices -> {count}");
     if count < 0 {
         return Err(CameraError::SdkError(0xFFFF_FFFF));
     }
