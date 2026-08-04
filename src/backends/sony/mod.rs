@@ -61,7 +61,7 @@ struct SnParam {
 extern "C" {
     fn sn_init() -> c_int;
     fn sn_release();
-    fn sn_list_devices(out: *mut SnDeviceInfo, capacity: c_int) -> c_int;
+    fn sn_list_devices(out: *mut SnDeviceInfo, capacity: c_int, time_in_sec: c_int) -> c_int;
     fn sn_connect(native_id: *const c_char, err: *mut u32) -> *mut c_void;
     fn sn_disconnect(cam: *mut c_void);
     fn sn_is_alive(cam: *mut c_void) -> c_int;
@@ -520,11 +520,14 @@ fn actor_thread(
     let mut sessions: HashMap<String, SessionHandle> = HashMap::new();
 
     // Warm the cache up front so a camera present at startup shows on an early poll.
-    refresh_cache(&cache, &sessions);
+    // A fast scan (1 s floor, ~2.2 s) reliably finds a body that is already plugged
+    // in at launch — the common case — instead of paying the full ~6.5 s thorough
+    // scan every start.
+    refresh_cache(&cache, &sessions, 1);
 
     // Re-enumerate after this much idle time to pick up (un)plugged cameras. During
-    // active use, commands arrive faster than this so the refresh never fires and
-    // the SDK's ~3 s scan stays off the hot path.
+    // active use (e.g. live view) commands arrive faster than this, so the refresh
+    // never fires and the blocking enumeration stays entirely off the hot path.
     const REFRESH: Duration = Duration::from_secs(5);
 
     loop {
@@ -574,7 +577,13 @@ fn actor_thread(
                 return;
             }
             Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => refresh_cache(&cache, &sessions),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Fast refresh (~2.2 s) once a camera is known; escalate to a thorough
+                // scan (~6.5 s) only while the cache is empty, to give a cold / freshly
+                // hot-plugged body the longer enumeration it may need to appear.
+                let thorough = cache.lock().map(|c| c.is_empty()).unwrap_or(true);
+                refresh_cache(&cache, &sessions, if thorough { 3 } else { 1 });
+            }
         }
     }
 
@@ -606,8 +615,14 @@ fn prune_dead_session(
 }
 
 /// Re-enumerates and replaces the shared device cache (runs on the SDK thread).
-fn refresh_cache(cache: &Arc<Mutex<Vec<DeviceInfo>>>, sessions: &HashMap<String, SessionHandle>) {
-    if let Ok(devices) = list_devices_impl(sessions) {
+/// `time_in_sec` picks the SDK enumeration floor — see the call sites for the
+/// thorough (3, ~6.5 s) vs fast (1, ~2.2 s) policy.
+fn refresh_cache(
+    cache: &Arc<Mutex<Vec<DeviceInfo>>>,
+    sessions: &HashMap<String, SessionHandle>,
+    time_in_sec: c_int,
+) {
+    if let Ok(devices) = list_devices_impl(sessions, time_in_sec) {
         if let Ok(mut c) = cache.lock() {
             *c = devices;
         }
@@ -631,12 +646,13 @@ fn set_cached_connected(cache: &Arc<Mutex<Vec<DeviceInfo>>>, native_id: &str, co
 
 fn list_devices_impl(
     sessions: &HashMap<String, SessionHandle>,
+    time_in_sec: c_int,
 ) -> Result<Vec<DeviceInfo>, CameraError> {
     let mut buf: Vec<SnDeviceInfo> = (0..SN_MAX_DEVICES)
         .map(|_| unsafe { std::mem::zeroed() })
         .collect();
 
-    let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int) };
+    let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int, time_in_sec) };
     eprintln!("[sony] sn_list_devices -> {count}");
     if count < 0 {
         return Err(CameraError::SdkError(0xFFFF_FFFF));

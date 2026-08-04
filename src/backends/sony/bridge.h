@@ -61,8 +61,10 @@ typedef struct SnParam {
 int  sn_init(void);
 void sn_release(void);
 
-/* Enumerate connected cameras. Returns count (>=0) or SN_ERR. */
-int  sn_list_devices(SnDeviceInfo* out, int capacity);
+/* Enumerate connected cameras. `time_in_sec` is the SDK enumeration floor: pass 3
+ * for a thorough scan (discovering a cold / freshly plugged body), 1 for a fast
+ * refresh of already-known cameras. Returns count (>=0) or SN_ERR. */
+int  sn_list_devices(SnDeviceInfo* out, int capacity, int time_in_sec);
 
 /* Open a session and block until connected. Returns an opaque handle, or NULL on
  * failure — in which case *err (if non-NULL) carries the CrError explaining why:

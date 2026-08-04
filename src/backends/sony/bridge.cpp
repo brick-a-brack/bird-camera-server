@@ -336,14 +336,20 @@ void sn_release(void) {
     g_inited.store(false);
 }
 
-int sn_list_devices(SnDeviceInfo* out, int capacity) {
+int sn_list_devices(SnDeviceInfo* out, int capacity, int time_in_sec) {
     if (sn_init() != SN_OK) return SN_ERR;
 
-    // Full 3 s scan: the α7 IV (and others) need it to be discovered over USB.
-    // The Rust side never calls this inline for /cameras — it serves a cached list
-    // refreshed on the idle SDK thread — so the scan time doesn't stall the route.
+    // `time_in_sec` is a floor the SDK waits before returning; the real USB scan is
+    // longer (measured ~6.5 s at 3, ~2.2 s at 1 on an α7 IV). The Rust side asks for
+    // a thorough scan (3) only when nothing is cached yet — needed to discover a cold
+    // / freshly plugged body — and a fast scan (1) to refresh an already-known one,
+    // so steady-state re-detection isn't stuck behind a 6.5 s enumeration. This never
+    // runs inline for /cameras (that serves the cache), so the scan can't stall a
+    // route; it can still block the actor thread, hence keeping it short when it can.
+    if (time_in_sec < 1) time_in_sec = 1;
     SDK::ICrEnumCameraObjectInfo* list = nullptr;
-    if (SDK::EnumCameraObjects(&list, 3) != SDK::CrError_None || !list) {
+    if (SDK::EnumCameraObjects(&list, static_cast<CrInt8u>(time_in_sec)) != SDK::CrError_None
+        || !list) {
         return 0; // no cameras (or enumeration failed) — treat as empty
     }
 
