@@ -56,6 +56,23 @@ fn main() {
         build_sony(&manifest_dir, &target);
     }
 
+    // Linux only, and only when BOTH the gphoto2 and Sony backends are bundled:
+    // reconcile their two libusb copies into a single loaded object. gphoto2
+    // links libusb-1.0.so.0 (loaded into the GLOBAL scope at startup), while
+    // Sony's Cr_Core dlopen's "libusb-1.0.so" — a different SONAME, so the loader
+    // maps a SECOND libusb. Without RTLD_DEEPBIND/DF_SYMBOLIC (neither is set),
+    // Sony's dlopen'd libusb resolves its OWN internal libusb_* calls against the
+    // global scope = gphoto2's libusb, so a transfer allocated by one libusb is
+    // submitted through the other's libusb_submit_transfer → segfault. Making
+    // gphoto2's bundled libusb answer to the SONAME Sony dlopen's collapses them
+    // to one object. Runs after both bundles are staged. Must precede this line.
+    if target.contains("linux")
+        && std::env::var_os("CARGO_FEATURE_BACKEND_GPHOTO2").is_some()
+        && std::env::var_os("CARGO_FEATURE_BACKEND_SONY").is_some()
+    {
+        unify_libusb_soname();
+    }
+
     if std::env::var_os("CARGO_FEATURE_BACKEND_WEBCAM_MACOS").is_some()
         && target.contains("apple")
     {
@@ -277,6 +294,103 @@ fn copy_sony_runtime(libdir: &str, target: &str) {
     // Plain build-script output (visible with `cargo build -vv`): a successful
     // staging is not a warning, and emitting it as one made every build noisy.
     println!("Sony CrSDK runtime staged in {}", profile_dir.display());
+}
+
+/// Collapse the gphoto2 and Sony libusb copies into a single loaded object
+/// (Linux, gphoto2 + Sony builds). See the call site for the interposition
+/// crash this prevents. Strategy: rename the flat bundled libusb to the SONAME
+/// Sony's Cr_Core dlopen's ("libusb-1.0.so"), set its soname to match, and
+/// repoint every bundled consumer's NEEDED entry from "libusb-1.0.so.0" to it.
+/// At runtime the flat libusb loads once (via gphoto2's patched NEEDED, into the
+/// global scope); Sony's dlopen("libusb-1.0.so") then dedups to that same object
+/// instead of mapping a second libusb. Best-effort: needs patchelf.
+fn unify_libusb_soname() {
+    let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
+    let profile_dir = Path::new(&out_dir)
+        .ancestors()
+        .nth(3)
+        .expect("unexpected OUT_DIR structure")
+        .to_path_buf();
+
+    const OLD: &str = "libusb-1.0.so.0"; // the bundled gphoto2 libusb SONAME/file
+    const NEW: &str = "libusb-1.0.so"; // the SONAME Sony's Cr_Core dlopen's
+
+    let src = profile_dir.join(OLD);
+    if !src.exists() {
+        // gphoto2 didn't stage a flat libusb (e.g. its closure resolved it
+        // elsewhere) — nothing to unify, and Sony keeps its own CrAdapter libusb.
+        println!("cargo:warning=libusb unify: {OLD} not staged, skipping");
+        return;
+    }
+    let dst = profile_dir.join(NEW);
+    let _ = std::fs::remove_file(&dst);
+    if let Err(e) = std::fs::rename(&src, &dst) {
+        println!("cargo:warning=libusb unify: rename {OLD}->{NEW} failed: {e}");
+        return;
+    }
+    // The dynamic loader resolves a NEEDED string as a *file name*, so the file
+    // must be named NEW; its recorded SONAME must be NEW too so dedup keys match.
+    if !patchelf(&["--set-soname", NEW], &dst) {
+        println!("cargo:warning=libusb unify: could not set soname on {NEW}");
+    }
+
+    // Repoint every bundled ELF that links libusb-1.0.so.0 to the renamed file:
+    // the flat libs (libgphoto2*, libEDSDK.so, libCr_Core.so, …) plus the
+    // dlopen'd camlibs/iolibs plugins. Files without that NEEDED are left
+    // untouched (patchelf --replace-needed is a no-op / harmless error there).
+    let mut targets: Vec<PathBuf> = shared_objects_recursive(&profile_dir);
+    for sub in ["camlibs", "iolibs"] {
+        targets.extend(shared_objects(&profile_dir.join(sub)));
+    }
+    for t in &targets {
+        // Skip the libusb we just renamed.
+        if t == &dst {
+            continue;
+        }
+        patchelf(&["--replace-needed", OLD, NEW], t);
+    }
+
+    // The gphoto2 bundle manifest (consumed by the CI packaging step to copy the
+    // flat libs) still lists the old name; point it at the renamed file so the
+    // packaged artifact ships libusb-1.0.so, not a now-missing libusb-1.0.so.0.
+    let manifest = profile_dir.join("gphoto2-bundle.manifest");
+    if let Ok(text) = std::fs::read_to_string(&manifest) {
+        let rewritten: String = text
+            .lines()
+            .map(|l| if l == OLD { NEW } else { l })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let _ = std::fs::write(&manifest, format!("{rewritten}\n"));
+    }
+
+    println!("cargo:warning=libusb unify: staged single {NEW} and repointed {} bundled consumer(s)", targets.len());
+}
+
+/// All `.so*` files directly in a directory (flat libs carry versioned suffixes
+/// like `libgphoto2.so.6`, which `shared_objects` — matching only `.so` — misses).
+fn shared_objects_recursive(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = entry.path();
+        if !p.is_file() {
+            continue;
+        }
+        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if name.contains(".so") {
+            out.push(p);
+        }
+    }
+    out
+}
+
+/// Run patchelf with the given args on a file; returns whether it succeeded.
+fn patchelf(args: &[&str], file: &Path) -> bool {
+    Command::new("patchelf")
+        .args(args)
+        .arg(file)
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 fn link_canon_sdk(manifest_dir: &str) {
@@ -912,12 +1026,10 @@ fn is_bundleworthy(dep: &Path, is_mac: bool) -> bool {
             // Host-coupled: MUST come from the target machine, never the bundle.
             // libudev talks to the host's systemd-udevd (netlink + /run/udev DB);
             // a copy frozen at build time mismatches a different host's udevd and
-            // corrupts udev's device list. libusb-1.0 enumerates USB *through*
-            // libudev, so a stale bundled pair makes libusb_submit_transfer
-            // dereference bad state and segfault (Sony's dlopen'd CrAdapter libusb
-            // shares the process-global libudev the gphoto2 closure pulled in).
-            // Both are documented as pre-installed host deps (see build.yml).
-            "libudev.", "libusb-1.0.", "libusb.",
+            // corrupts udev's device list. libusb (which we DO bundle) reaches
+            // udev through it, but always via the stable udev_* API, so a bundled
+            // libusb + host libudev is safe — a bundled libudev is not.
+            "libudev.",
         ];
         let name = dep.file_name().and_then(|n| n.to_str()).unwrap_or("");
         !SYSTEM.iter().any(|s| name.starts_with(s))

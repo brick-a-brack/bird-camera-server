@@ -387,9 +387,13 @@ jobs:
   # binary is not possible — libEDSDK.so cannot be linked statically. We
   # build on ubuntu-22.04 for older-glibc compatibility (glibc 2.35+) and
   # ship the binary alongside libEDSDK.so, found at runtime via rpath=$ORIGIN.
+  # libgphoto2 and a single libusb-1.0 are bundled next to the binary (build.rs);
+  # when the Sony and gphoto2 backends ship together the two libusb copies are
+  # unified into one object (build.rs unify_libusb_soname) to avoid an ELF
+  # symbol-interposition crash in libusb_submit_transfer. libudev is deliberately
+  # not bundled (host-coupled) and is present on every systemd distro.
   # Runtime requirements on the target Linux host:
-  #   - libusb-1.0 (typically pre-installed)
-  #   - libgphoto2 (the gphoto2 backend links it dynamically; not bundled)
+  #   - libudev / systemd-udev (present on every systemd distro)
   #   - read/write permissions on the camera USB node (see Canon udev rules)
   #   - webcam access: shipped install.sh sets up a uaccess udev rule so the
   #     active desktop user gets ACL access to /dev/video* without group changes
