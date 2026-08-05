@@ -4,6 +4,11 @@
 # Installs a udev rule that grants the active desktop user read/write access
 # to /dev/video* via POSIX ACL. Run once after extracting the release archive.
 # Re-running is safe (the rule file is overwritten with the same content).
+#
+# libusb-1.0 is bundled next to the binary (a single copy shared by the Canon,
+# gphoto2 and Sony backends — see build.rs), so no libusb host package is
+# required. libudev is intentionally NOT bundled (it is coupled to the host's
+# systemd-udevd) and is present on every systemd distro.
 
 set -e
 

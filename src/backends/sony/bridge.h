@@ -36,6 +36,7 @@ extern "C" {
 #define SN_OK               0
 #define SN_ERR            (-1)
 #define SN_NOT_READY        2   /* live view frame not available yet */
+#define SN_ERR_AF           3   /* sn_capture: autofocus could not lock, no shot */
 
 /* sn_connect: the camera is not on the bus (no CrError covers this). */
 #define SN_CONNECT_NOT_FOUND 0xFFFFFFFFu
@@ -60,8 +61,10 @@ typedef struct SnParam {
 int  sn_init(void);
 void sn_release(void);
 
-/* Enumerate connected cameras. Returns count (>=0) or SN_ERR. */
-int  sn_list_devices(SnDeviceInfo* out, int capacity);
+/* Enumerate connected cameras. `time_in_sec` is the SDK enumeration floor: pass 3
+ * for a thorough scan (discovering a cold / freshly plugged body), 1 for a fast
+ * refresh of already-known cameras. Returns count (>=0) or SN_ERR. */
+int  sn_list_devices(SnDeviceInfo* out, int capacity, int time_in_sec);
 
 /* Open a session and block until connected. Returns an opaque handle, or NULL on
  * failure — in which case *err (if non-NULL) carries the CrError explaining why:

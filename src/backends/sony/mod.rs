@@ -34,6 +34,8 @@ const SN_MAX_OPTIONS: usize = 512;
 
 const SN_OK: c_int = 0;
 const SN_NOT_READY: c_int = 2;
+/// `sn_capture` return code: autofocus could not lock, so nothing was shot.
+const SN_ERR_AF: c_int = 3;
 
 /// Sony's USB vendor id — used to build the cross-backend dedup key so the same
 /// body seen by gphoto2 (PTP) is recognised as this SDK's device.
@@ -59,7 +61,7 @@ struct SnParam {
 extern "C" {
     fn sn_init() -> c_int;
     fn sn_release();
-    fn sn_list_devices(out: *mut SnDeviceInfo, capacity: c_int) -> c_int;
+    fn sn_list_devices(out: *mut SnDeviceInfo, capacity: c_int, time_in_sec: c_int) -> c_int;
     fn sn_connect(native_id: *const c_char, err: *mut u32) -> *mut c_void;
     fn sn_disconnect(cam: *mut c_void);
     fn sn_is_alive(cam: *mut c_void) -> c_int;
@@ -518,12 +520,19 @@ fn actor_thread(
     let mut sessions: HashMap<String, SessionHandle> = HashMap::new();
 
     // Warm the cache up front so a camera present at startup shows on an early poll.
-    refresh_cache(&cache, &sessions);
+    // A fast scan (1 s floor, ~2.2 s) reliably finds a body that is already plugged
+    // in at launch — the common case — instead of paying the full ~6.5 s thorough
+    // scan every start.
+    refresh_cache(&cache, &sessions, 1);
 
-    // Re-enumerate after this much idle time to pick up (un)plugged cameras. During
-    // active use, commands arrive faster than this so the refresh never fires and
-    // the SDK's ~3 s scan stays off the hot path.
-    const REFRESH: Duration = Duration::from_secs(5);
+    // Re-enumerate after this much idle time to pick up (un)plugged cameras. Kept
+    // short because a powered-off *connected* body is only ever noticed here — the
+    // SDK does not reliably deliver OnDisconnected for a power cut, so enumeration
+    // dropping the device is the sole signal, and this interval bounds how long a
+    // gone camera lingers in the list. During active use (e.g. live view) commands
+    // arrive faster than this, so the refresh never fires and the blocking
+    // enumeration stays entirely off the hot path.
+    const REFRESH: Duration = Duration::from_secs(2);
 
     loop {
         match rx.recv_timeout(REFRESH) {
@@ -572,7 +581,13 @@ fn actor_thread(
                 return;
             }
             Ok(Command::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            Err(mpsc::RecvTimeoutError::Timeout) => refresh_cache(&cache, &sessions),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Fast refresh (~2.2 s) once a camera is known; escalate to a thorough
+                // scan (~6.5 s) only while the cache is empty, to give a cold / freshly
+                // hot-plugged body the longer enumeration it may need to appear.
+                let thorough = cache.lock().map(|c| c.is_empty()).unwrap_or(true);
+                refresh_cache(&cache, &sessions, if thorough { 3 } else { 1 });
+            }
         }
     }
 
@@ -604,8 +619,14 @@ fn prune_dead_session(
 }
 
 /// Re-enumerates and replaces the shared device cache (runs on the SDK thread).
-fn refresh_cache(cache: &Arc<Mutex<Vec<DeviceInfo>>>, sessions: &HashMap<String, SessionHandle>) {
-    if let Ok(devices) = list_devices_impl(sessions) {
+/// `time_in_sec` picks the SDK enumeration floor — see the call sites for the
+/// thorough (3, ~6.5 s) vs fast (1, ~2.2 s) policy.
+fn refresh_cache(
+    cache: &Arc<Mutex<Vec<DeviceInfo>>>,
+    sessions: &HashMap<String, SessionHandle>,
+    time_in_sec: c_int,
+) {
+    if let Ok(devices) = list_devices_impl(sessions, time_in_sec) {
         if let Ok(mut c) = cache.lock() {
             *c = devices;
         }
@@ -629,12 +650,13 @@ fn set_cached_connected(cache: &Arc<Mutex<Vec<DeviceInfo>>>, native_id: &str, co
 
 fn list_devices_impl(
     sessions: &HashMap<String, SessionHandle>,
+    time_in_sec: c_int,
 ) -> Result<Vec<DeviceInfo>, CameraError> {
     let mut buf: Vec<SnDeviceInfo> = (0..SN_MAX_DEVICES)
         .map(|_| unsafe { std::mem::zeroed() })
         .collect();
 
-    let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int) };
+    let count = unsafe { sn_list_devices(buf.as_mut_ptr(), SN_MAX_DEVICES as c_int, time_in_sec) };
     if count < 0 {
         return Err(CameraError::SdkError(0xFFFF_FFFF));
     }
@@ -676,17 +698,21 @@ fn connect_impl(
     Ok(())
 }
 
-/// CrError_Connect_TimeOut: the body is on the USB bus but never completes the
-/// handshake. It gets into that state when a previous PC Remote session was not
-/// closed (the server was killed rather than stopped), and it stays there until the
-/// camera is power-cycled — no amount of retrying clears it. Say so: reporting this
-/// as "device not found" sends people looking for a camera that is plugged in and
-/// visibly on.
+/// A camera that still believes a previous PC Remote session is open refuses the
+/// next Connect and stays that way until it is power-cycled — no amount of retrying
+/// clears it. The body says so with one of three CrErrors:
+/// - `CrError_Connect_TimeOut` (0x8208): on the USB bus but never completes the handshake.
+/// - `CrError_Reconnect_TimeOut` (0x8209): the SDK's auto-reconnect gave up.
+/// - `CrError_Connect_SessionAlreadyOpened` (0x8210): a session is explicitly still open.
+/// Map all three to the same actionable message: reporting them as "device not found"
+/// (or a raw hex code) sends people looking for a camera that is plugged in and visibly on.
 fn connect_error(device_id: &str, err: u32) -> CameraError {
     const CONNECT_TIMEOUT: u32 = 0x0000_8208;
+    const RECONNECT_TIMEOUT: u32 = 0x0000_8209;
+    const SESSION_ALREADY_OPENED: u32 = 0x0000_8210;
     const NOT_FOUND: u32 = 0xFFFF_FFFF;
     match err {
-        CONNECT_TIMEOUT => CameraError::Backend(
+        CONNECT_TIMEOUT | RECONNECT_TIMEOUT | SESSION_ALREADY_OPENED => CameraError::Backend(
             "the camera did not answer: it is still holding an earlier PC Remote \
              session. Turn it off and on again (or unplug and replug it)."
                 .to_string(),
@@ -921,6 +947,13 @@ fn capture_photo_impl(
     let mut size: u32 = 0;
     let ret = unsafe { sn_capture(handle, &mut data_ptr, &mut size) };
 
+    if ret == SN_ERR_AF {
+        return Err(CameraError::Backend(
+            "autofocus could not lock, so no photo was taken. Aim at something with \
+             more contrast, or switch the camera to manual focus."
+                .to_string(),
+        ));
+    }
     if ret != SN_OK || data_ptr.is_null() {
         return Err(CameraError::SdkError(0xFFFF_FFFD));
     }

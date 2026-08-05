@@ -233,6 +233,29 @@ public:
 
 static std::atomic<bool> g_inited{false};
 
+// The most recent camera enumeration, kept alive so sn_connect can reuse it instead
+// of paying a second ~3 s EnumCameraObjects scan. Only ever touched on the single
+// actor thread (sn_list_devices / sn_connect / sn_disconnect are all serialized
+// there by the Rust actor), so no locking is needed. It is FROZEN — never released
+// or replaced — while any session is open (g_open_sessions > 0); that guarantees an
+// ICrCameraObjectInfo handed to a live session stays valid for the session's whole
+// lifetime, since the only place that would free the list won't while it is in use.
+static SDK::ICrEnumCameraObjectInfo* g_enum_list = nullptr;
+static int g_open_sessions = 0;
+
+// Finds the camera whose USB id matches native_id inside an enumeration list.
+static const SDK::ICrCameraObjectInfo* find_in_list(
+        SDK::ICrEnumCameraObjectInfo* list, const char* native_id) {
+    if (!list) return nullptr;
+    int total = static_cast<int>(list->GetCount());
+    for (int i = 0; i < total; ++i) {
+        const SDK::ICrCameraObjectInfo* ci = list->GetCameraObjectInfo(i);
+        if (!ci) continue;
+        if (hex_encode(ci->GetId(), ci->GetIdSize()) == native_id) return ci;
+    }
+    return nullptr;
+}
+
 // Reads one property's current raw value; returns false if unavailable.
 static bool get_current_value(SDK::CrDeviceHandle handle, uint32_t code, uint64_t* out) {
     CrInt32u codes[1] = { code };
@@ -305,18 +328,28 @@ int sn_init(void) {
 
 void sn_release(void) {
     if (!g_inited.load()) return;
+    // Free the cached enumeration before tearing the SDK down (its objects belong to
+    // the SDK). Sessions are already cleared by the time we get here.
+    if (g_enum_list) { g_enum_list->Release(); g_enum_list = nullptr; }
+    g_open_sessions = 0;
     SDK::Release();
     g_inited.store(false);
 }
 
-int sn_list_devices(SnDeviceInfo* out, int capacity) {
+int sn_list_devices(SnDeviceInfo* out, int capacity, int time_in_sec) {
     if (sn_init() != SN_OK) return SN_ERR;
 
-    // Full 3 s scan: the α7 IV (and others) need it to be discovered over USB.
-    // The Rust side never calls this inline for /cameras — it serves a cached list
-    // refreshed on the idle SDK thread — so the scan time doesn't stall the route.
+    // `time_in_sec` is a floor the SDK waits before returning; the real USB scan is
+    // longer (measured ~6.5 s at 3, ~2.2 s at 1 on an α7 IV). The Rust side asks for
+    // a thorough scan (3) only when nothing is cached yet — needed to discover a cold
+    // / freshly plugged body — and a fast scan (1) to refresh an already-known one,
+    // so steady-state re-detection isn't stuck behind a 6.5 s enumeration. This never
+    // runs inline for /cameras (that serves the cache), so the scan can't stall a
+    // route; it can still block the actor thread, hence keeping it short when it can.
+    if (time_in_sec < 1) time_in_sec = 1;
     SDK::ICrEnumCameraObjectInfo* list = nullptr;
-    if (SDK::EnumCameraObjects(&list, 3) != SDK::CrError_None || !list) {
+    if (SDK::EnumCameraObjects(&list, static_cast<CrInt8u>(time_in_sec)) != SDK::CrError_None
+        || !list) {
         return 0; // no cameras (or enumeration failed) — treat as empty
     }
 
@@ -329,7 +362,16 @@ int sn_list_devices(SnDeviceInfo* out, int capacity) {
         copy_cstr(out[i].id, SN_MAX_ID, hex_encode(ci->GetId(), ci->GetIdSize()));
         copy_cstr(out[i].conn_type, SN_MAX_CONN, to_utf8(ci->GetConnectionTypeName()));
     }
-    list->Release();
+    // Keep this enumeration alive for sn_connect to reuse (saves it a second ~3 s
+    // scan), but only when no session is open — a list a live session may be
+    // referencing must never be freed under it. While sessions are open we've still
+    // filled `out` above for the cache; just drop this scan's list.
+    if (g_open_sessions == 0) {
+        if (g_enum_list) g_enum_list->Release();
+        g_enum_list = list;
+    } else {
+        list->Release();
+    }
     return n;
 }
 
@@ -341,36 +383,38 @@ void* sn_connect(const char* native_id, uint32_t* err) {
 
     if (sn_init() != SN_OK) return fail(SN_CONNECT_NOT_FOUND);
 
-    SDK::ICrEnumCameraObjectInfo* list = nullptr;
-    SDK::CrError enum_err = SDK::EnumCameraObjects(&list);
-    if (enum_err != SDK::CrError_None || !list) {
-        return fail(static_cast<uint32_t>(enum_err));
-    }
+    // Reuse the enumeration the background cache already did: the scan that made this
+    // device appear in /cameras left its list in g_enum_list, so connecting need not
+    // pay another ~3 s EnumCameraObjects. The list is frozen while sessions are open,
+    // and this whole function runs on the actor thread so no refresh can free it
+    // mid-connect — a match found here stays valid for the session, we don't own it.
+    // `owned_list` stays null on this fast path.
+    const SDK::ICrCameraObjectInfo* match = find_in_list(g_enum_list, native_id);
+    SDK::ICrEnumCameraObjectInfo* owned_list = nullptr;
 
-    const SDK::ICrCameraObjectInfo* match = nullptr;
-    int total = static_cast<int>(list->GetCount());
-    for (int i = 0; i < total; ++i) {
-        const SDK::ICrCameraObjectInfo* ci = list->GetCameraObjectInfo(i);
-        if (!ci) continue;
-        if (hex_encode(ci->GetId(), ci->GetIdSize()) == native_id) {
-            match = ci;
-            break;
-        }
-    }
+    // Fallback: nothing cached yet, or the device was plugged in after the cache
+    // froze — enumerate now and own that list for the session's lifetime.
     if (!match) {
-        list->Release();
-        return fail(SN_CONNECT_NOT_FOUND);
+        SDK::CrError enum_err = SDK::EnumCameraObjects(&owned_list);
+        if (enum_err != SDK::CrError_None || !owned_list) {
+            return fail(static_cast<uint32_t>(enum_err));
+        }
+        match = find_in_list(owned_list, native_id);
+        if (!match) {
+            owned_list->Release();
+            return fail(SN_CONNECT_NOT_FOUND);
+        }
     }
 
     SonyCamera* cam = new SonyCamera();
-    cam->enum_list = list; // keep the list (and `match`) alive for the session
+    cam->enum_list = owned_list; // null when reusing the shared g_enum_list
 
     // Connect defaults to CrSdkControlMode_Remote + reconnect ON. The call returns
     // immediately; the session is ready only once OnConnected fires.
     SDK::CrError conn_err = SDK::Connect(
         const_cast<SDK::ICrCameraObjectInfo*>(match), cam, &cam->handle);
     if (conn_err != SDK::CrError_None) {
-        list->Release();
+        if (cam->enum_list) cam->enum_list->Release();
         delete cam;
         return fail(static_cast<uint32_t>(conn_err));
     }
@@ -386,7 +430,7 @@ void* sn_connect(const char* native_id, uint32_t* err) {
             uint32_t why = cam->last_error.load();
             lk.unlock();
             SDK::ReleaseDevice(cam->handle);
-            list->Release();
+            if (cam->enum_list) cam->enum_list->Release();
             delete cam;
             return fail(why ? why : static_cast<uint32_t>(SDK::CrError_Connect_TimeOut));
         }
@@ -405,7 +449,7 @@ void* sn_connect(const char* native_id, uint32_t* err) {
     if (cam->gone.load()) {
         uint32_t why = cam->last_error.load();
         SDK::ReleaseDevice(cam->handle);
-        list->Release();
+        if (cam->enum_list) cam->enum_list->Release();
         delete cam;
         return fail(why ? why : static_cast<uint32_t>(SDK::CrError_Connect_TimeOut));
     }
@@ -433,6 +477,9 @@ void* sn_connect(const char* native_id, uint32_t* err) {
                      static_cast<unsigned>(lv_set));
     }
 
+    // Session is live: freeze g_enum_list until it (and any sibling) closes, so the
+    // enumeration this session may be referencing is never freed under it.
+    g_open_sessions++;
     return cam;
 }
 
@@ -445,10 +492,27 @@ int sn_is_alive(void* handle) {
 void sn_disconnect(void* handle) {
     SonyCamera* cam = static_cast<SonyCamera*>(handle);
     if (!cam) return;
+
+    // SDK::Disconnect is asynchronous: the body only finishes tearing the PC Remote
+    // session down once it calls OnDisconnected. Releasing the device before that
+    // leaves the camera believing the session is still open, so the *next* Connect
+    // is refused with CrError_Connect_SessionAlreadyOpened (0x8210) or
+    // CrError_Connect_TimeOut (0x8208) until the body is power-cycled. Wait for the
+    // callback (bounded, so a body that never answers can't hang the shutdown path),
+    // then release. If the device was already dropped (gone), connected is already
+    // false and this returns at once.
     SDK::Disconnect(cam->handle);
+    {
+        std::unique_lock<std::mutex> lk(cam->mtx);
+        cam->cv.wait_for(lk, std::chrono::seconds(5), [&] { return !cam->connected; });
+    }
     SDK::ReleaseDevice(cam->handle);
     if (cam->enum_list) cam->enum_list->Release();
     delete cam;
+
+    // One fewer session referencing g_enum_list; when it reaches zero the next cache
+    // refresh is free to replace the frozen enumeration again.
+    if (g_open_sessions > 0) g_open_sessions--;
 }
 
 int sn_get_parameters(void* handle, SnParam* out, int capacity) {
@@ -587,10 +651,51 @@ int sn_capture(void* handle, uint8_t** out, uint32_t* size) {
     }
     cam->last_warning.store(0);
 
-    // Press and release the shutter.
-    SDK::SendCommand(cam->handle, SDK::CrCommandId_Release, SDK::CrCommandParam_Down);
-    std::this_thread::sleep_for(std::chrono::milliseconds(35));
-    SDK::SendCommand(cam->handle, SDK::CrCommandId_Release, SDK::CrCommandParam_Up);
+    // Use S1andRelease (autofocus + shutter), not a bare Release (shutter only): in
+    // any AF focus mode the body refuses to fire until focus is locked, so a plain
+    // full-press produces no image and we'd just time out. S1andRelease makes the
+    // camera focus first, then fire.
+    SDK::SendCommand(cam->handle, SDK::CrCommandId_S1andRelease, SDK::CrCommandParam_Down);
+
+    // Hold the press until the shot is actually taken, instead of a blind 35 ms:
+    // poll FocusIndication so we neither cut autofocus short (releasing the button
+    // mid-AF cancels the shot) nor hang forever on a body that can't focus. Manual
+    // focus never reports a lock, so a body in MF just fires and OnCompleteDownload
+    // ends the wait early.
+    auto is_downloaded = [&] {
+        std::lock_guard<std::mutex> lk(cam->mtx);
+        return cam->download_done;
+    };
+    bool af_failed = false;
+    for (int i = 0; i < 80; ++i) { // up to ~4 s of AF
+        if (is_downloaded()) break; // already fired (incl. MF / release-priority)
+        uint64_t fi = 0;
+        if (get_current_value(cam->handle, SDK::CrDeviceProperty_FocusIndication, &fi)) {
+            uint32_t v = static_cast<uint32_t>(fi);
+            if (v == SDK::CrFocusIndicator_Focused_AF_S
+                || v == SDK::CrFocusIndicator_Focused_AF_C
+                || v == SDK::CrFocusIndicator_TrackingSubject_AF_C) {
+                break; // locked — the shot fires now
+            }
+            if (v == SDK::CrFocusIndicator_NotFocused_AF_S
+                || v == SDK::CrFocusIndicator_NotFocused_AF_C) {
+                af_failed = true;
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    SDK::SendCommand(cam->handle, SDK::CrCommandId_S1andRelease, SDK::CrCommandParam_Up);
+
+    // Autofocus explicitly failed and nothing was shot: don't make the caller wait
+    // out the full download timeout — cancel the pending shooting and say so.
+    if (af_failed && !is_downloaded()) {
+        SDK::SendCommand(cam->handle, SDK::CrCommandId_CancelShooting, SDK::CrCommandParam_Down);
+        SDK::SendCommand(cam->handle, SDK::CrCommandId_CancelShooting, SDK::CrCommandParam_Up);
+        std::fprintf(stderr, "[sony] capture: autofocus could not lock — no shot\n");
+        return SN_ERR_AF;
+    }
 
     tstring path;
     {
