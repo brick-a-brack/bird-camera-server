@@ -775,213 +775,6 @@
 {"backend": "gphoto2", "brand": "Mustek", "model": "gSmart mini 3", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Mustek", "model": "MDC 800", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Nexxtech", "model": "Nexxtech Mini Digital Camera", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Nikon 1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Nikon DSLR", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2000", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 2100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2200", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2200v1.1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2500", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 2500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3200", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3500", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 3500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3700", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 4100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4200", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4300", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 4300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4500", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4600", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4600a", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4800", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5200", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5400", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5600", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5700", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 700", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 7600", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 7900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 800", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 8700", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 880", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 8800", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 885", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 900S", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 910", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 9400 ", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 950", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 950S", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 990", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "CoolPix 995", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix A", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix A900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW110", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW130", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix B500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix B700", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L1", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L10", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L11", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L110", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L12", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L120", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L16", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L19", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L20", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L23", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L27", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L340", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L4", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L810 ", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L820 ", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L840", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1000", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1100", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P2", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P300", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P330", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P4", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P50", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P5000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P510", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P5100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P520", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P60", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P6000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7700", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7800", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P80", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P80 v1.1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P90", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S01", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S02", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S200", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S220", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S225", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2600", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2700", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2900", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3200", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3600", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3700", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S4", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S4300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S500", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S5100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S60", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6000", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S620", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6800", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S7c", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S8000", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S8200", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9500", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9700", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix SQ", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D2H SLR", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D2Hs", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D2X SLR", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D3", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "D50", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D200", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D2Xs", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D300", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D300s", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3100", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3200", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3300", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3400", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3500", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3s", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D3x", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D4", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D40", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D40x", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D4s", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D500", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5000", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5100", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5200", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5300", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5500", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D5600", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D6", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D60", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D600", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D610", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D70", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D700", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D7000", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D70s", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D7100", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D7200", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D750", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D7500", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D780", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D80", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D800", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D800E", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D810", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D810A", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D850", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC D90", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "DSC Df", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "J1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "J2", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "J3", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "J4", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "J5", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "KeyMission 170", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "KeyMission 360", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "P950", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "S1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "S2", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "V1", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "V2", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "V3", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z30", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z5", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z50", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z50_2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z6", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z6 III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z6_2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z7", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z7_2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z8", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Z9", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Zf", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Nikon", "model": "Zfc", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "nisis", "model": "Quickpix Qp3", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "NogaNet", "model": "NogaNet TDC-15", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Nokia", "model": "N73", "liveview": false, "capture": false, "configuration": true}
@@ -1379,3 +1172,201 @@
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-1", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-E10", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-E10M2", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "1", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "DSLR", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 100", "modelName": "CoolPix 100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2000", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2200", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 2500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 300", "modelName": "CoolPix 300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3100", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3200", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 3700", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4200", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4500", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4600", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 4800", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5200", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5400", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5600", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5700", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 5900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 700", "modelName": "CoolPix 700", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 7600", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 7900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 800", "modelName": "CoolPix 800", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 8700", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 880", "modelName": "CoolPix 880", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 8800", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 885", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 900", "modelName": "CoolPix 900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 900S", "modelName": "CoolPix 900S", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 910", "modelName": "CoolPix 910", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 9400", "modelName": "Coolpix 9400 ", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 950", "modelName": "CoolPix 950", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 950S", "modelName": "CoolPix 950S", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 990", "modelName": "CoolPix 990", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix 995", "modelName": "CoolPix 995", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix A", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix A900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW110", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix AW130", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix B500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix B700", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L1", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L10", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L11", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L110", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L12", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L120", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L16", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L19", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L20", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L23", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L27", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L340", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L4", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L810", "modelName": "Coolpix L810", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L820", "modelName": "Coolpix L820", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix L840", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1000", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P1100", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P2", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P300", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P330", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P4", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P50", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P5000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P510", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P5100", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P520", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P60", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P6000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7700", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P7800", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P80", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P90", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S01", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S02", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S200", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S220", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S225", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2600", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2700", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S2900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3200", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3600", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S3700", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S4", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S4300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S500", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S5100", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S60", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6000", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S620", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S6800", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S7c", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S8000", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S8200", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9500", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix S9700", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix SQ", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D2H", "modelName": "D2H SLR", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D2Hs", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D2X", "modelName": "D2X SLR", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D50", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D200", "modelName": "DSC D200", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D2Xs", "modelName": "DSC D2Xs", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D300", "modelName": "DSC D300", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3000", "modelName": "DSC D3000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D300s", "modelName": "DSC D300s", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3100", "modelName": "DSC D3100", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3200", "modelName": "DSC D3200", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3300", "modelName": "DSC D3300", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3400", "modelName": "DSC D3400", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3500", "modelName": "DSC D3500", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3s", "modelName": "DSC D3s", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D3x", "modelName": "DSC D3x", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D4", "modelName": "DSC D4", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D40", "modelName": "DSC D40", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D40x", "modelName": "DSC D40x", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D4s", "modelName": "DSC D4s", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5", "modelName": "DSC D5", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D500", "modelName": "DSC D500", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5000", "modelName": "DSC D5000", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5100", "modelName": "DSC D5100", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5200", "modelName": "DSC D5200", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5300", "modelName": "DSC D5300", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5500", "modelName": "DSC D5500", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D5600", "modelName": "DSC D5600", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D6", "modelName": "DSC D6", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D60", "modelName": "DSC D60", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D600", "modelName": "DSC D600", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D610", "modelName": "DSC D610", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D70", "modelName": "DSC D70", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D700", "modelName": "DSC D700", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D7000", "modelName": "DSC D7000", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D70s", "modelName": "DSC D70s", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D7100", "modelName": "DSC D7100", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D7200", "modelName": "DSC D7200", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D750", "modelName": "DSC D750", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D7500", "modelName": "DSC D7500", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D780", "modelName": "DSC D780", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D80", "modelName": "DSC D80", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D800", "modelName": "DSC D800", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D800E", "modelName": "DSC D800E", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D810", "modelName": "DSC D810", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D810A", "modelName": "DSC D810A", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D850", "modelName": "DSC D850", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "D90", "modelName": "DSC D90", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Df", "modelName": "DSC Df", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "J1", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "J2", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "J3", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "J4", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "J5", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "KeyMission 170", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "KeyMission 360", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Coolpix P950", "modelName": "P950", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "S1", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "S2", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "V1", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "V2", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "V3", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 30", "modelName": "Z30", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 5", "modelName": "Z5", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 50", "modelName": "Z50", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 50II", "modelName": "Z50_2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 6", "modelName": "Z6", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 6III", "modelName": "Z6 III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 6II", "modelName": "Z6_2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 7", "modelName": "Z7", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 7II", "modelName": "Z7_2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 8", "modelName": "Z8", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z 9", "modelName": "Z9", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z f", "modelName": "Zf", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Nikon", "model": "Z fc", "modelName": "Zfc", "liveview": true, "capture": true, "configuration": true}

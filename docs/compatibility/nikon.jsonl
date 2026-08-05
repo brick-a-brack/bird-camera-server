@@ -1,15 +1,15 @@
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z9", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z8", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z6III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z7II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z6II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z7", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z6", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z5II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z5", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Zf", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z50II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z50", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z30", "liveview": true, "capture": true, "configuration": true}
-{"backend": "nikon_zs2", "brand": "Nikon", "model": "Zfc", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 9", "modelName": "Z9", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 8", "modelName": "Z8", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 6III", "modelName": "Z6III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 7II", "modelName": "Z7II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 6II", "modelName": "Z6II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 7", "modelName": "Z7", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 6", "modelName": "Z6", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 5II", "modelName": "Z5II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 5", "modelName": "Z5", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z f", "modelName": "Zf", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 50II", "modelName": "Z50II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 50", "modelName": "Z50", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z 30", "modelName": "Z30", "liveview": true, "capture": true, "configuration": true}
+{"backend": "nikon_zs2", "brand": "Nikon", "model": "Z fc", "modelName": "Zfc", "liveview": true, "capture": true, "configuration": true}
 {"backend": "nikon_zs2", "brand": "Nikon", "model": "ZR", "liveview": true, "capture": true, "configuration": true}
