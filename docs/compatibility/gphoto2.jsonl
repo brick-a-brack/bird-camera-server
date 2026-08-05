@@ -1128,7 +1128,6 @@
 {"backend": "gphoto2", "brand": "Precision", "model": "Precision Mini Digital Camera", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Precision", "model": "Precision Mini, Model HA513A", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Pretec", "model": "dc530", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "PTP/IP", "model": "PTP/IP Camera", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "PureDigital", "model": "Ritz Disposable", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Quark", "model": "Probe 99", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "QuickPix", "model": "QP1", "liveview": false, "capture": false, "configuration": false}
@@ -1207,37 +1206,72 @@
 {"backend": "gphoto2", "brand": "SiPix", "model": "Snap", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "SiPix", "model": "Web2", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "So.", "model": "Show 301", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Sony", "model": "A6700", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A3000", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A5000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A5100", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A6000", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A6100", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A6300", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A6500", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A6600", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A68", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7 III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7 IV", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A77 M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7r", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7r II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7R III", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7r III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7S", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A7S II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A9", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-A99 M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-RX10M4", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "Alpha-RX1R II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Soundstar", "model": "Soundstar TDC-35", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SpyPen", "model": "Axys", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SpyPen", "model": "Cleo", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SpyPen", "model": "Luxo", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SpyPen", "model": "Memo", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SpyPen", "model": "Xion", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SQ chip", "model": "SQ chip camera", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "ST2205", "model": "ST2205 USB picture frame", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "StarCam", "model": "CP086", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "STM", "model": "USB Dual-mode camera", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Stop", "model": "Stop & Shop 87096", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Suprema", "model": "Suprema Digital Keychain Camera", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "SY-2107C", "model": "SY-2107C", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Tiger", "model": "Fast Flicks", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Timlex", "model": "CP075", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "TOPDON", "model": "TC004 Mini", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Topfield", "model": "TF5000PVR", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M60", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M61", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M65", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Trust", "model": "Trust PowerC@m 350FS", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Trust", "model": "Trust PowerC@m 350FT", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Trust", "model": "Trust Spyc@m 100", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Trust", "model": "Familycam 300", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Trust", "model": "Spyc@m 500F FLASH", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Typhoon", "model": "Typhoon StyloCam", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "UMAX", "model": "UMAX AstraPix 320s", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "UMAX", "model": "AstraPen", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "ViviCam3350", "model": "ViviCam3350", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "ViviCam5B", "model": "ViviCam5B", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Freelance", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Mini Digital Camera", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam 55", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam3350B", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam35", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Wild Planet", "model": "Wild Planet Digital Spy Camera 70137", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "ZINA", "model": "ZINA Mini Digital Keychain Camera", "liveview": false, "capture": false, "configuration": false}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6700", "modelName": "A6700", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-3000", "modelName": "Alpha-A3000", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-5000", "modelName": "Alpha-A5000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-5100", "modelName": "Alpha-A5100", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6000", "modelName": "Alpha-A6000", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6100", "modelName": "Alpha-A6100", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6300", "modelName": "Alpha-A6300", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6500", "modelName": "Alpha-A6500", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6600", "modelName": "Alpha-A6600", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCA-68", "modelName": "Alpha-A68", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7", "modelName": "Alpha-A7", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7M3", "modelName": "Alpha-A7 III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7M4", "modelName": "Alpha-A7 IV", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCA-77M2", "modelName": "Alpha-A77 M2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7R", "modelName": "Alpha-A7r", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM2", "modelName": "Alpha-A7r II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM3", "modelName": "Alpha-A7R III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7S", "modelName": "Alpha-A7S", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7SM2", "modelName": "Alpha-A7S II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-9", "modelName": "Alpha-A9", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCA-99M2", "modelName": "Alpha-A99 M2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSC-RX10M4", "modelName": "Alpha-RX10M4", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSC-RX1RM2", "modelName": "Alpha-RX1R II", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "DCR-PC100", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Sony", "model": "DSC RX0 II", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "DSC-A100", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "DSC-A7r IV", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "DSC-A7S III", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "DSC-A900", "liveview": false, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSC-RX0M2", "modelName": "DSC RX0 II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSLR-A100", "modelName": "DSC-A100", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM4", "modelName": "DSC-A7r IV", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7SM3", "modelName": "DSC-A7S III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSLR-A900", "modelName": "DSC-A900", "liveview": false, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "DSC-F1", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Sony", "model": "DSC-F55", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Sony", "model": "DSC-F707V", "liveview": false, "capture": false, "configuration": true}
@@ -1315,7 +1349,6 @@
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-6400", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7C", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7R M2", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM3A", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM4A", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ILCE-7RM5", "liveview": true, "capture": true, "configuration": true}
@@ -1326,13 +1359,12 @@
 {"backend": "gphoto2", "brand": "Sony", "model": "MVC-CD300", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "MVC-CD500", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "NEX-3N", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "NEX5", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "NEX-5", "modelName": "NEX5", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "NEX-5N", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "NEX-5R", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "NEX-6", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "NEX-7", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "PTP", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "RX100M3", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "DSC-RX100M3", "modelName": "RX100M3", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A35", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A350", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A37", "liveview": false, "capture": false, "configuration": true}
@@ -1341,46 +1373,9 @@
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A58", "liveview": false, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A65V", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "SLT-A77V", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Sony", "model": "SLT-A99v", "liveview": false, "capture": false, "configuration": true}
+{"backend": "gphoto2", "brand": "Sony", "model": "SLT-A99V", "modelName": "SLT-A99v", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "TRV-20E", "liveview": false, "capture": false, "configuration": false}
 {"backend": "gphoto2", "brand": "Sony", "model": "UMC-R10C", "liveview": false, "capture": false, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-1", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-E10", "liveview": true, "capture": true, "configuration": true}
 {"backend": "gphoto2", "brand": "Sony", "model": "ZV-E10M2", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Soundstar", "model": "Soundstar TDC-35", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SpyPen", "model": "Axys", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SpyPen", "model": "Cleo", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SpyPen", "model": "Luxo", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SpyPen", "model": "Memo", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SpyPen", "model": "Xion", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SQ chip", "model": "SQ chip camera", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "ST2205", "model": "ST2205 USB picture frame", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "StarCam", "model": "CP086", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "STM", "model": "USB Dual-mode camera", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Stop", "model": "Stop & Shop 87096", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Suprema", "model": "Suprema Digital Keychain Camera", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "SY-2107C", "model": "SY-2107C", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Tiger", "model": "Fast Flicks", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Timlex", "model": "CP075", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "TOPDON", "model": "TC004 Mini", "liveview": false, "capture": false, "configuration": true}
-{"backend": "gphoto2", "brand": "Topfield", "model": "TF5000PVR", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M60", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M61", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Toshiba", "model": "PDR-M65", "liveview": false, "capture": true, "configuration": true}
-{"backend": "gphoto2", "brand": "Trust", "model": "Trust PowerC@m 350FS", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Trust", "model": "Trust PowerC@m 350FT", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Trust", "model": "Trust Spyc@m 100", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Trust", "model": "Familycam 300", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Trust", "model": "Spyc@m 500F FLASH", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Typhoon", "model": "Typhoon StyloCam", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "UMAX", "model": "UMAX AstraPix 320s", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "UMAX", "model": "AstraPen", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "ViviCam3350", "model": "ViviCam3350", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "ViviCam5B", "model": "ViviCam5B", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Freelance", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Mini Digital Camera", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam 55", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam3350B", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Vivitar", "model": "Vivitar Vivicam35", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "Wild Planet", "model": "Wild Planet Digital Spy Camera 70137", "liveview": false, "capture": false, "configuration": false}
-{"backend": "gphoto2", "brand": "ZINA", "model": "ZINA Mini Digital Keychain Camera", "liveview": false, "capture": false, "configuration": false}

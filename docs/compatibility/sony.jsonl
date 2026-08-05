@@ -1,33 +1,33 @@
 {"backend": "sony", "brand": "Sony", "model": "ILX-LR1", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-1M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-1", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-9M3", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-9M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM6", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM5", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM4A", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM4", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7CR", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7SM3", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7M5", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7M4", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7CM2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-7C", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILCE-6700", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "MPC-2610", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX6V", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX6T", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX3A", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX3", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FX30", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-1M2", "modelName": "Alpha-A1 II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-1", "modelName": "Alpha-A1", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-9M3", "modelName": "Alpha-A9 III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-9M2", "modelName": "Alpha-A9 II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM6", "modelName": "Alpha-A7R VI", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM5", "modelName": "Alpha-A7R V", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM4A", "modelName": "Alpha-A7R IVA", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7RM4", "modelName": "Alpha-A7R IV", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7CR", "modelName": "Alpha-A7CR", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7SM3", "modelName": "Alpha-A7S III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7M5", "modelName": "Alpha-A7 V", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7M4", "modelName": "Alpha-A7 IV", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7CM2", "modelName": "Alpha-A7C II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-7C", "modelName": "Alpha-A7C", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILCE-6700", "modelName": "Alpha-A6700", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "MPC-2610", "modelName": "BURANO", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX6V", "modelName": "FX6", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX6T", "modelName": "FX6", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX3A", "modelName": "FX3", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX3", "modelName": "FX3", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX2", "modelName": "FX2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FX30", "modelName": "FX30", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "PXW-Z300", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "PXW-Z380", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "PXW-Z200", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "HXR-NX800", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "BRC-AM7", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ILME-FR7", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ILME-FR7", "modelName": "FR7", "liveview": true, "capture": true, "configuration": true}
 {"backend": "sony", "brand": "Sony", "model": "ZV-E1", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "ZV-E10M2", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "DSC-RX1RM3", "liveview": true, "capture": true, "configuration": true}
-{"backend": "sony", "brand": "Sony", "model": "DSC-RX0M2", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "ZV-E10M2", "modelName": "ZV-E10 II", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "DSC-RX1RM3", "modelName": "RX1R III", "liveview": true, "capture": true, "configuration": true}
+{"backend": "sony", "brand": "Sony", "model": "DSC-RX0M2", "modelName": "RX0 II", "liveview": true, "capture": true, "configuration": true}
