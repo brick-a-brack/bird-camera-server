@@ -371,6 +371,33 @@ jobs:
             Write-Error "CrAdapter\Cr_PTP_USB.dll not in the packaged artifact"; exit 1
           }
 
+          # Visual C++ runtime (VCRUNTIME140.dll / VCRUNTIME140_1.dll / MSVCP140.dll)
+          # — the "Microsoft Visual C++ 2015-2022 Redistributable (x64)". This is NOT
+          # part of Windows (unlike the Universal CRT, which is), so a machine without
+          # the redistributable installed fails at launch with "VCRUNTIME140.dll /
+          # MSVCP140.dll missing". Three things in this artifact link the MSVC dynamic
+          # CRT: the Rust binary (MSVC toolchain -> VCRUNTIME140.dll), the Sony C++
+          # bridge (bridge.cpp, C++17 -> MSVCP140.dll + VCRUNTIME140_1.dll), and the
+          # vendor SDK DLLs (Canon/Sony/Nikon). Ship the runtime DLLs next to the exe
+          # (app-local deployment, supported by Microsoft) so the artifact runs on a
+          # clean Windows install. Fail hard if they can't be located — better than
+          # shipping a zip that won't launch on the user's machine.
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -property installationPath
+          if (-not $vsPath) { Write-Error "vswhere could not locate a Visual Studio installation"; exit 1 }
+          $verFile = Join-Path $vsPath "VC\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt"
+          $redistVer = (Get-Content $verFile -ErrorAction Stop).Trim()
+          $crtDir = Join-Path $vsPath "VC\Redist\MSVC\$redistVer\x64"
+          $crtSub = Get-ChildItem $crtDir -Directory -Filter "Microsoft.VC*.CRT" | Select-Object -First 1
+          if (-not $crtSub) { Write-Error "MSVC CRT redist folder not found under $crtDir"; exit 1 }
+          $vcRuntime = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+          foreach ($dll in $vcRuntime) {
+            $src = Join-Path $crtSub.FullName $dll
+            if (-not (Test-Path $src)) { Write-Error "MSVC runtime $dll not found at $src"; exit 1 }
+            Copy-Item $src $out
+          }
+          Write-Host "Bundled MSVC runtime ($redistVer): $($vcRuntime -join ', ')"
+
           Compress-Archive -Path "$out\*" -DestinationPath "dist\toucan-camera-server-windows.zip"
 
       - name: Upload artifact
