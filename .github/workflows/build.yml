@@ -552,6 +552,19 @@ jobs:
             || { echo "ERROR: libCr_Core.so not in dependency list"; exit 1; }
           grep -F 'libCr_Core.so => not found' /tmp/ldd.txt \
             && { echo "ERROR: libCr_Core.so present but unresolved (rpath broken)"; exit 1; }
+          #  2b. libusb-1.0.so must resolve to OUR bundled copy. libEDSDK.so NEEDs
+          #      the *unversioned* "libusb-1.0.so", which no runtime package ships
+          #      (only libusb-1.0.so.0; the bare name comes with -dev). This runner
+          #      HAS libusb-1.0-0-dev installed (to build libgphoto2), so a broken
+          #      rpath would still resolve libEDSDK's libusb against the system dev
+          #      symlink and pass a naive check — while every end-user machine (no
+          #      -dev) fails at launch. Assert it resolves to the bundled file, not
+          #      a system path, so a missing $ORIGIN rpath on libEDSDK.so is caught.
+          USB_RESOLVED="$(awk '/libusb-1\.0\.so =>/ {print $3}' /tmp/ldd.txt)"
+          [ -n "$USB_RESOLVED" ] || { echo "ERROR: libusb-1.0.so not in dependency graph"; exit 1; }
+          if [ "$(realpath "$USB_RESOLVED")" != "$(realpath "$PWD/libusb-1.0.so")" ]; then
+            echo "ERROR: libusb-1.0.so resolves to '$USB_RESOLVED', not the bundled copy (libEDSDK.so rpath broken)"; exit 1
+          fi
           #  3. libxml2.so.2 must resolve to OUR bundled copy, not the runner's
           #     system one — otherwise the artifact silently depends on a lib that
           #     recent distros no longer ship (see the packaging step).

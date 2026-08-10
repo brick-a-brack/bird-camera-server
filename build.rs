@@ -490,6 +490,17 @@ fn copy_canon_so(manifest_dir: &str) {
     if src.exists() {
         std::fs::copy(&src, &dst)
             .unwrap_or_else(|e| panic!("failed to copy libEDSDK.so to {dst:?}: {e}"));
+        // libEDSDK.so has a NEEDED entry for libusb-1.0.so but ships with NO
+        // rpath. The main binary's DT_RUNPATH=$ORIGIN does NOT propagate to a
+        // dependency's own dependencies (DT_RUNPATH, unlike the legacy DT_RPATH,
+        // is only searched for the direct NEEDEDs of the object that carries it),
+        // so the loader looks for libEDSDK's libusb only in LD_LIBRARY_PATH and
+        // the system dirs — never next to the binary. Worse, the NEEDED name is
+        // the *unversioned* "libusb-1.0.so", which no runtime package provides
+        // (only libusb-1.0.so.0; the bare name ships only with the -dev package),
+        // so a system fallback can't satisfy it either. Give libEDSDK.so its own
+        // $ORIGIN rpath so it resolves the bundled libusb-1.0.so sitting beside it.
+        patch_rpath(&dst, "$ORIGIN");
         println!("cargo:warning=Copied libEDSDK.so to {}", profile_dir.display());
     } else {
         println!("cargo:warning=libEDSDK.so not found, skipping copy: {}", src.display());
