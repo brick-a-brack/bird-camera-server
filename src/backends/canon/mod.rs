@@ -54,6 +54,13 @@ const STATE_EVENT_WILL_SOON_SHUTDOWN: u32 = 0x00000303;
 const PROP_SAVE_TO: u32 = 0x0000000b;
 const SAVE_TO_HOST: u32 = 2;
 
+// ImageQuality is two 16-bit components: high word (bits 16-31) = 1st image,
+// low word (bits 0-15) = 2nd image. Each word is [size:8 | compression:8].
+// A RAW component is marked by compression byte 0x64; 0xff0f means "no image".
+const IQ_RAW_MARKER: u32 = 0x64; // compression byte value that denotes RAW
+const IQ_NO_IMAGE: u32 = 0xff0f; // "no second image" word (size 0xff, comp 0x0f)
+const IQ_DEFAULT_JPEG: i32 = 0x0013ff0f; // L JPEG Fine, JPEG-only (fallback)
+
 // Capture timeout
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -741,6 +748,79 @@ fn find_camera_ref(device_id: &str) -> Result<EdsCameraRef, CameraError> {
     found.ok_or_else(|| CameraError::DeviceNotFound(device_id.to_string()))
 }
 
+/// Returns true when the ImageQuality code's first image component is RAW.
+fn image_quality_has_raw(code: i32) -> bool {
+    (code as u32 >> 16) & 0xFF == IQ_RAW_MARKER
+}
+
+/// Force the connected camera into a JPEG-only ImageQuality.
+///
+/// Some bodies are left set to RAW or RAW+JPEG, and host-side capture only
+/// downloads JPEG — a RAW-only setting makes `capture_photo` fail. If the
+/// current setting includes RAW, switch to a JPEG-only mode: keep the existing
+/// JPEG component when the camera is on RAW+JPEG, otherwise pick a supported
+/// JPEG option from the property description (falling back to L JPEG Fine).
+///
+/// Best-effort: any SDK error is logged and ignored so connect still succeeds.
+fn force_jpeg_only_quality(camera_ref: EdsCameraRef) {
+    let mut current: i32 = 0;
+    let err = unsafe {
+        EdsGetPropertyData(
+            camera_ref,
+            PROP_IMAGE_QUALITY,
+            0,
+            std::mem::size_of::<i32>() as u32,
+            &mut current as *mut i32 as *mut std::ffi::c_void,
+        )
+    };
+    if err != EDS_ERR_OK {
+        eprintln!("canon: could not read ImageQuality ({err:#010x}); leaving as-is");
+        return;
+    }
+
+    if !image_quality_has_raw(current) {
+        return; // already JPEG-only, nothing to do
+    }
+
+    // Prefer keeping the camera's own JPEG component (RAW+JPEG → JPEG-only).
+    let jpeg_word = (current as u32) & 0xFFFF;
+    let mut target = if jpeg_word != IQ_NO_IMAGE {
+        ((jpeg_word << 16) | IQ_NO_IMAGE) as i32
+    } else {
+        IQ_DEFAULT_JPEG
+    };
+
+    // Validate against the supported values; if our target is not offered,
+    // fall back to the first JPEG-only option the body advertises.
+    let mut desc = EdsPropertyDesc { form: 0, access: 0, num_elements: 0, prop_desc: [0; 128] };
+    let derr = unsafe { EdsGetPropertyDesc(camera_ref, PROP_IMAGE_QUALITY, &mut desc) };
+    if derr == EDS_ERR_OK && desc.num_elements > 0 {
+        let options = &desc.prop_desc[..desc.num_elements as usize];
+        if !options.contains(&target) {
+            match options.iter().copied().find(|&c| !image_quality_has_raw(c)) {
+                Some(jpeg) => target = jpeg,
+                None => {
+                    eprintln!("canon: camera offers no JPEG-only ImageQuality; leaving as-is");
+                    return;
+                }
+            }
+        }
+    }
+
+    let err = unsafe {
+        EdsSetPropertyData(
+            camera_ref,
+            PROP_IMAGE_QUALITY,
+            0,
+            std::mem::size_of::<i32>() as u32,
+            &target as *const i32 as *const std::ffi::c_void,
+        )
+    };
+    if err != EDS_ERR_OK {
+        eprintln!("canon: could not force JPEG-only ImageQuality ({err:#010x})");
+    }
+}
+
 fn connect_impl(
     device_id: &str,
     connected: &mut HashMap<String, EdsCameraRef>,
@@ -805,6 +885,10 @@ fn connect_impl(
             &save_to as *const u32 as *const std::ffi::c_void,
         )
     };
+
+    // Host-side capture only downloads JPEG. If the body is set to RAW or
+    // RAW+JPEG, capture would fail — force it to a JPEG-only quality.
+    force_jpeg_only_quality(camera_ref);
 
     // Inform the camera that the host has ample free space.
     unsafe {
@@ -942,7 +1026,7 @@ fn get_parameters_impl(
     let select_specs: &[Spec] = &[
         // RAW-containing formats are excluded: capture returns only JPEG.
         // All RAW codes have byte 2 == 0x64 (e.g. 0x0064ff0f, 0x00640013, …).
-        (ParameterType::ImageQuality,    PROP_IMAGE_QUALITY,     decode_image_quality, |c| (c as u32 >> 16) & 0xFF != 0x64),
+        (ParameterType::ImageQuality,    PROP_IMAGE_QUALITY,     decode_image_quality, |c| !image_quality_has_raw(c)),
         (ParameterType::WhiteBalance,    PROP_WHITE_BALANCE,     decode_wb,            |_| true),
         (ParameterType::ColorTemperature,PROP_COLOR_TEMPERATURE, decode_color_temp,    |_| true),
     ];
