@@ -61,8 +61,11 @@ const IQ_RAW_MARKER: u32 = 0x64; // compression byte value that denotes RAW
 const IQ_NO_IMAGE: u32 = 0xff0f; // "no second image" word (size 0xff, comp 0x0f)
 const IQ_DEFAULT_JPEG: i32 = 0x0013ff0f; // L JPEG Fine, JPEG-only (fallback)
 
-// Capture timeout
-const CAPTURE_TIMEOUT: Duration = Duration::from_secs(30);
+// Capture timeout. Must cover the longest non-bulb exposure (30 s) plus the
+// long-exposure noise-reduction "dark frame" (another ~30 s when enabled on the
+// body) plus processing and download. A tight 30 s value made 30 s exposures
+// always time out mid-shot.
+const CAPTURE_TIMEOUT: Duration = Duration::from_secs(120);
 
 // Keep-alive interval: reset the sleep timer every 30 s for connected cameras.
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(30);
